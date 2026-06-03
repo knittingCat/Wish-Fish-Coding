@@ -96,7 +96,7 @@
   </div>
 </div>
 
-<!-- ── Delete Confirm Modal ───────────────────────────────────────────────── -->
+<!-- ── End Session Modal ──────────────────────────────────────────────────── -->
 <div class="overlay" id="deleteOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -110,6 +110,24 @@
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeOverlay('deleteOverlay')">Cancel</button>
       <button class="btn btn-danger" id="deleteBtn" onclick="confirmDelete()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Permanent Delete Modal ─────────────────────────────────────────────── -->
+<div class="overlay" id="permDeleteOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Delete Session?</h2>
+      <button class="modal-close" onclick="closeOverlay('permDeleteOverlay')">&times;</button>
+    </div>
+    <p style="color:var(--txt2);font-size:0.9rem;margin-bottom:20px">
+      This will permanently delete the session and all its chat history. This cannot be undone.<br><br>
+      Session code: <strong id="permDeleteCode" style="color:var(--accent)"></strong>
+    </p>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('permDeleteOverlay')">Cancel</button>
+      <button class="btn btn-danger" id="permDeleteBtn" onclick="confirmPermDelete()">Delete Forever</button>
     </div>
   </div>
 </div>
@@ -172,7 +190,9 @@
           </div>
           <div class="sess-card-actions" onclick="event.stopPropagation()">
             <button class="btn btn-secondary btn-sm" onclick="openInvite('${s.code}')">Invite</button>
-            ${s.is_active ? `<button class="btn btn-danger btn-sm" onclick="openDelete('${s.code}')">End</button>` : ''}
+            ${s.is_active
+              ? `<button class="btn btn-danger btn-sm" onclick="openDelete('${s.code}')">End</button>`
+              : `<button class="btn btn-danger btn-sm" onclick="openPermDelete('${s.code}')">🗑 Delete</button>`}
           </div>
         </div>`;
     }).join('');
@@ -298,6 +318,30 @@
       toast(err.message, 'err');
     } finally {
       btn.disabled = false; btn.textContent = 'End Session';
+    }
+  }
+
+  // ── Permanent delete ───────────────────────────────────────────────────────
+  let permDeleteTarget = null;
+
+  function openPermDelete(code) {
+    permDeleteTarget = code;
+    document.getElementById('permDeleteCode').textContent = code;
+    openOverlay('permDeleteOverlay');
+  }
+
+  async function confirmPermDelete() {
+    const btn = document.getElementById('permDeleteBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await API.delete(`/api/sessions/${permDeleteTarget}/permanent`);
+      closeOverlay('permDeleteOverlay');
+      toast('Session deleted', 'ok');
+      await loadSessions();
+    } catch (err) {
+      toast(err.message, 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Delete Forever';
     }
   }
 

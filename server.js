@@ -260,6 +260,21 @@ app.delete('/api/sessions/:code', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    'SELECT * FROM sessions WHERE code=$1 AND host_id=$2',
+    [req.params.code.toUpperCase(), req.user.id]
+  );
+  const session = result.rows[0];
+  if (!session) return res.status(404).json({ error: 'Session not found or not yours' });
+  // Cascade delete child rows before removing the session
+  await pool.query('DELETE FROM participants WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM messages WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM invites WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM sessions WHERE id=$1', [session.id]);
+  res.json({ success: true });
+});
+
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const roomState = new Map();
 
