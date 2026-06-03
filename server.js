@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const path = require('path');
@@ -18,56 +18,57 @@ const PORT = process.env.PORT || 3000;
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
 // ── Database ──────────────────────────────────────────────────────────────────
-const db = new Database(path.join(__dirname, 'wishfish.db'));
-db.pragma('journal_mode = WAL');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT UNIQUE NOT NULL,
-    title TEXT NOT NULL,
-    host_id INTEGER NOT NULL,
-    is_scheduled INTEGER DEFAULT 0,
-    scheduled_time DATETIME,
-    is_active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (host_id) REFERENCES users(id)
-  );
-  CREATE TABLE IF NOT EXISTS invites (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    email TEXT NOT NULL,
-    invited_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    reminder_1h_sent INTEGER DEFAULT 0,
-    reminder_15m_sent INTEGER DEFAULT 0,
-    UNIQUE(session_id, email),
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-  );
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    username TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-  );
-  CREATE TABLE IF NOT EXISTS participants (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(session_id, user_id),
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-  );
-`);
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id SERIAL PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      host_id INTEGER NOT NULL REFERENCES users(id),
+      is_scheduled INTEGER DEFAULT 0,
+      scheduled_time TIMESTAMP,
+      is_active INTEGER DEFAULT 1,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS invites (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      email TEXT NOT NULL,
+      invited_at TIMESTAMP DEFAULT NOW(),
+      reminder_1h_sent INTEGER DEFAULT 0,
+      reminder_15m_sent INTEGER DEFAULT 0,
+      UNIQUE(session_id, email)
+    );
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      username TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS participants (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      joined_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(session_id, user_id)
+    );
+  `);
+  console.log('Database ready');
+}
 
 // ── Email ─────────────────────────────────────────────────────────────────────
 const transporter = process.env.SMTP_USER
@@ -81,15 +82,11 @@ const transporter = process.env.SMTP_USER
 
 async function sendEmail(to, subject, html) {
   if (!transporter) {
-    console.log(`[Email SKIPPED - no SMTP config] To: ${to} | Subject: ${subject}`);
+    console.log(`[Email SKIPPED] To: ${to} | Subject: ${subject}`);
     return;
   }
   try {
-    await transporter.sendMail({
-      from: `"Wish Fish Coding" <${process.env.SMTP_USER}>`,
-      to, subject, html
-    });
-    console.log(`[Email sent] To: ${to}`);
+    await transporter.sendMail({ from: `"Wish Fish Coding" <${process.env.SMTP_USER}>`, to, subject, html });
   } catch (err) {
     console.error('[Email error]', err.message);
   }
@@ -128,10 +125,13 @@ function genCode() {
   return c;
 }
 
-function uniqueCode() {
+async function uniqueCode() {
   let code;
-  do { code = genCode(); }
-  while (db.prepare('SELECT id FROM sessions WHERE code=?').get(code));
+  do {
+    code = genCode();
+    const res = await pool.query('SELECT id FROM sessions WHERE code=$1', [code]);
+    if (res.rows.length === 0) break;
+  } while (true);
   return code;
 }
 
@@ -150,10 +150,9 @@ function authMiddleware(req, res, next) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// HTML routes
 app.get('/dashboard', (_, res) => res.sendFile(path.join(__dirname, 'public/dashboard.html')));
-app.get('/session', (_, res) => res.sendFile(path.join(__dirname, 'public/session.html')));
-app.get('/register', (_, res) => res.sendFile(path.join(__dirname, 'public/register.html')));
+app.get('/session',   (_, res) => res.sendFile(path.join(__dirname, 'public/session.html')));
+app.get('/register',  (_, res) => res.sendFile(path.join(__dirname, 'public/register.html')));
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
@@ -164,13 +163,15 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   try {
     const hash = await bcrypt.hash(password, 10);
-    const { lastInsertRowid } = db
-      .prepare('INSERT INTO users (email,username,password_hash) VALUES (?,?,?)')
-      .run(email.trim().toLowerCase(), username.trim(), hash);
-    const token = jwt.sign({ id: lastInsertRowid, username: username.trim() }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, username: username.trim() });
+    const result = await pool.query(
+      'INSERT INTO users (email,username,password_hash) VALUES ($1,$2,$3) RETURNING id,username',
+      [email.trim().toLowerCase(), username.trim(), hash]
+    );
+    const user = result.rows[0];
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, username: user.username });
   } catch (err) {
-    if (err.message.includes('UNIQUE'))
+    if (err.code === '23505')
       return res.status(400).json({ error: 'Email or username already taken' });
     res.status(500).json({ error: 'Registration failed' });
   }
@@ -180,7 +181,8 @@ app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password)
     return res.status(400).json({ error: 'Username and password required' });
-  const user = db.prepare('SELECT * FROM users WHERE username=?').get(username.trim());
+  const result = await pool.query('SELECT * FROM users WHERE username=$1', [username.trim()]);
+  const user = result.rows[0];
   if (!user || !(await bcrypt.compare(password, user.password_hash)))
     return res.status(401).json({ error: 'Invalid credentials' });
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
@@ -188,53 +190,56 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
-app.get('/api/sessions', authMiddleware, (req, res) => {
-  const rows = db.prepare(`
+app.get('/api/sessions', authMiddleware, async (req, res) => {
+  const result = await pool.query(`
     SELECT s.*, u.username AS host_username,
       (SELECT COUNT(*) FROM participants WHERE session_id=s.id) AS participant_count,
       (SELECT COUNT(*) FROM invites WHERE session_id=s.id) AS invite_count
     FROM sessions s JOIN users u ON s.host_id=u.id
-    WHERE s.host_id=? ORDER BY s.created_at DESC
-  `).all(req.user.id);
-  res.json(rows);
+    WHERE s.host_id=$1 ORDER BY s.created_at DESC
+  `, [req.user.id]);
+  res.json(result.rows);
 });
 
-app.post('/api/sessions', authMiddleware, (req, res) => {
+app.post('/api/sessions', authMiddleware, async (req, res) => {
   const { title, is_scheduled, scheduled_time } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Title is required' });
-  const code = uniqueCode();
-  const { lastInsertRowid } = db
-    .prepare('INSERT INTO sessions (code,title,host_id,is_scheduled,scheduled_time) VALUES (?,?,?,?,?)')
-    .run(code, title.trim(), req.user.id, is_scheduled ? 1 : 0, scheduled_time || null);
-  res.json(db.prepare('SELECT * FROM sessions WHERE id=?').get(lastInsertRowid));
+  const code = await uniqueCode();
+  const result = await pool.query(
+    'INSERT INTO sessions (code,title,host_id,is_scheduled,scheduled_time) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+    [code, title.trim(), req.user.id, is_scheduled ? 1 : 0, scheduled_time || null]
+  );
+  res.json(result.rows[0]);
 });
 
-app.get('/api/sessions/:code', authMiddleware, (req, res) => {
-  const session = db.prepare(`
-    SELECT s.*, u.username AS host_username
-    FROM sessions s JOIN users u ON s.host_id=u.id
-    WHERE s.code=?
-  `).get(req.params.code.toUpperCase());
+app.get('/api/sessions/:code', authMiddleware, async (req, res) => {
+  const sessRes = await pool.query(
+    'SELECT s.*, u.username AS host_username FROM sessions s JOIN users u ON s.host_id=u.id WHERE s.code=$1',
+    [req.params.code.toUpperCase()]
+  );
+  const session = sessRes.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found' });
-  const invites = db.prepare('SELECT email FROM invites WHERE session_id=?').all(session.id);
-  const messages = db.prepare(`
-    SELECT id, username, content, created_at FROM messages
-    WHERE session_id=? ORDER BY created_at ASC LIMIT 200
-  `).all(session.id);
-  res.json({ ...session, invites, messages });
+  const invites = await pool.query('SELECT email FROM invites WHERE session_id=$1', [session.id]);
+  const messages = await pool.query(
+    'SELECT id,username,content,created_at FROM messages WHERE session_id=$1 ORDER BY created_at ASC LIMIT 200',
+    [session.id]
+  );
+  res.json({ ...session, invites: invites.rows, messages: messages.rows });
 });
 
 app.post('/api/sessions/:code/invite', authMiddleware, async (req, res) => {
   const { emails } = req.body || {};
   if (!emails?.length) return res.status(400).json({ error: 'Emails required' });
-  const session = db.prepare('SELECT * FROM sessions WHERE code=?').get(req.params.code.toUpperCase());
+  const sessRes = await pool.query('SELECT * FROM sessions WHERE code=$1', [req.params.code.toUpperCase()]);
+  const session = sessRes.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found' });
-
-  const insert = db.prepare('INSERT OR IGNORE INTO invites (session_id,email) VALUES (?,?)');
   for (const raw of emails) {
     const email = raw.trim().toLowerCase();
     if (!email) continue;
-    insert.run(session.id, email);
+    await pool.query(
+      'INSERT INTO invites (session_id,email) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [session.id, email]
+    );
     const subj = session.is_scheduled
       ? `You're invited to "${session.title}" on Wish Fish Coding`
       : `Join "${session.title}" now on Wish Fish Coding`;
@@ -243,18 +248,19 @@ app.post('/api/sessions/:code/invite', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
-app.delete('/api/sessions/:code', authMiddleware, (req, res) => {
-  const session = db
-    .prepare('SELECT * FROM sessions WHERE code=? AND host_id=?')
-    .get(req.params.code.toUpperCase(), req.user.id);
+app.delete('/api/sessions/:code', authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    'SELECT * FROM sessions WHERE code=$1 AND host_id=$2',
+    [req.params.code.toUpperCase(), req.user.id]
+  );
+  const session = result.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found or not yours' });
-  db.prepare('UPDATE sessions SET is_active=0 WHERE id=?').run(session.id);
+  await pool.query('UPDATE sessions SET is_active=0 WHERE id=$1', [session.id]);
   io.to(req.params.code.toUpperCase()).emit('session-ended');
   res.json({ success: true });
 });
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
-// roomState: code -> { participants: Map<socketId, {socketId,username,userId}>, sharerId: string|null }
 const roomState = new Map();
 
 io.use((socket, next) => {
@@ -269,9 +275,10 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  socket.on('join-session', ({ code }) => {
+  socket.on('join-session', async ({ code }) => {
     const room = code.toUpperCase();
-    const session = db.prepare('SELECT * FROM sessions WHERE code=?').get(room);
+    const result = await pool.query('SELECT * FROM sessions WHERE code=$1', [room]);
+    const session = result.rows[0];
     if (!session) { socket.emit('error', { message: 'Session not found' }); return; }
 
     socket.join(room);
@@ -282,22 +289,24 @@ io.on('connection', (socket) => {
     const state = roomState.get(room);
     state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id });
 
-    db.prepare('INSERT OR IGNORE INTO participants (session_id,user_id) VALUES (?,?)').run(session.id, socket.user.id);
+    await pool.query(
+      'INSERT INTO participants (session_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [session.id, socket.user.id]
+    );
 
-    // Tell joining user about existing peers (for WebRTC)
     const peers = [...state.participants.values()].filter(p => p.socketId !== socket.id);
     socket.emit('room-state', { peers, sharerId: state.sharerId });
-
-    // Tell everyone about the updated list
     io.to(room).emit('participants-update', [...state.participants.values()]);
     socket.to(room).emit('user-joined', { socketId: socket.id, username: socket.user.username });
   });
 
-  socket.on('chat-message', ({ content }) => {
+  socket.on('chat-message', async ({ content }) => {
     if (!socket.sessionCode || !content?.trim()) return;
     const text = content.trim();
-    db.prepare('INSERT INTO messages (session_id,user_id,username,content) VALUES (?,?,?,?)')
-      .run(socket.sessionDbId, socket.user.id, socket.user.username, text);
+    await pool.query(
+      'INSERT INTO messages (session_id,user_id,username,content) VALUES ($1,$2,$3,$4)',
+      [socket.sessionDbId, socket.user.id, socket.user.username, text]
+    );
     io.to(socket.sessionCode).emit('chat-message', {
       username: socket.user.username,
       content: text,
@@ -305,7 +314,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // WebRTC signaling (pass-through)
   socket.on('webrtc-offer', ({ offer, targetSocketId }) => {
     io.to(targetSocketId).emit('webrtc-offer', { offer, fromSocketId: socket.id, username: socket.user.username });
   });
@@ -330,7 +338,6 @@ io.on('connection', (socket) => {
     socket.to(socket.sessionCode).emit('screen-share-stopped', { socketId: socket.id });
   });
 
-  // A new viewer asking the current sharer for a stream
   socket.on('request-stream', ({ sharerSocketId }) => {
     io.to(sharerSocketId).emit('viewer-wants-stream', { viewerSocketId: socket.id });
   });
@@ -350,35 +357,43 @@ io.on('connection', (socket) => {
   });
 });
 
-// ── Email reminder cron (every minute) ───────────────────────────────────────
-cron.schedule('* * * * *', () => {
+// ── Email reminders cron ──────────────────────────────────────────────────────
+cron.schedule('* * * * *', async () => {
   const now = Date.now();
-  const window = 90 * 1000; // ±90s tolerance
+  const window = 90 * 1000;
 
-  function checkReminders(offsetMs, sentCol) {
-    const target = new Date(now + offsetMs).toISOString();
+  async function checkReminders(offsetMs, sentCol) {
     const lo = new Date(now + offsetMs - window).toISOString();
     const hi = new Date(now + offsetMs + window).toISOString();
-    const rows = db.prepare(`
+    const result = await pool.query(`
       SELECT i.id, i.email, s.title, s.code, s.scheduled_time
       FROM invites i JOIN sessions s ON i.session_id=s.id
       WHERE s.is_scheduled=1 AND s.is_active=1
         AND i.${sentCol}=0
-        AND s.scheduled_time BETWEEN ? AND ?
-    `).all(lo, hi);
-    for (const r of rows) {
+        AND s.scheduled_time BETWEEN $1 AND $2
+    `, [lo, hi]);
+    for (const r of result.rows) {
       const label = offsetMs >= 3600000 ? 'in 1 hour' : 'in 15 minutes';
       sendEmail(r.email, `Reminder: "${r.title}" starts ${label}`,
         inviteEmailHtml(r.title, r.code, r.scheduled_time, true, label));
-      db.prepare(`UPDATE invites SET ${sentCol}=1 WHERE id=?`).run(r.id);
+      await pool.query(`UPDATE invites SET ${sentCol}=1 WHERE id=$1`, [r.id]);
     }
   }
 
-  checkReminders(3600000, 'reminder_1h_sent');
-  checkReminders(900000,  'reminder_15m_sent');
+  try {
+    await checkReminders(3600000, 'reminder_1h_sent');
+    await checkReminders(900000,  'reminder_15m_sent');
+  } catch (err) {
+    console.error('[Cron error]', err.message);
+  }
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-server.listen(PORT, () => {
-  console.log(`\n🐟 Wish Fish Coding running at ${APP_URL}\n`);
+initDb().then(() => {
+  server.listen(PORT, () => {
+    console.log(`\n🐟 Wish Fish Coding running at ${APP_URL}\n`);
+  });
+}).catch(err => {
+  console.error('Failed to init database:', err.message);
+  process.exit(1);
 });
