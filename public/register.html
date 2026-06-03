@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wish Fish Coding — Create Account</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="fish-big">🐟</div>
+      <h1>Create Account</h1>
+      <p>Join Wish Fish Coding</p>
+    </div>
+
+    <div id="alert" class="alert alert-err"></div>
+
+    <form id="regForm">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Choose a username" autocomplete="username" required
+               minlength="3" maxlength="30">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="At least 6 characters" autocomplete="new-password" required minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="submitBtn">Create Account</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="/">Sign in</a>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  if (getToken()) window.location.href = '/dashboard';
+
+  const form     = document.getElementById('regForm');
+  const alertEl  = document.getElementById('alert');
+  const submitBtn = document.getElementById('submitBtn');
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    alertEl.className = 'alert';
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const data = await API.post('/api/auth/register', {
+        email:    document.getElementById('email').value.trim(),
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value
+      });
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('username', data.username);
+      window.location.href = '/dashboard';
+    } catch (err) {
+      alertEl.textContent = err.message;
+      alertEl.className = 'alert alert-err show';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wish Fish Coding — Session</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="overflow:hidden">
+
+<!-- Nav -->
+<nav>
+  <a href="/dashboard" class="brand"><span class="fish">🐟</span> <span>Wish Fish Coding</span></a>
+  <div class="nav-right">
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Leave</button>
+  </div>
+</nav>
+
+<!-- Session Layout -->
+<div class="session-layout">
+
+  <!-- Main area -->
+  <div class="session-main">
+    <!-- Toolbar -->
+    <div class="session-toolbar">
+      <div style="display:flex;align-items:center;gap:14px;min-width:0">
+        <div class="sess-code-display" id="codeDisplay">------</div>
+        <div class="toolbar-title" id="sessionTitle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      </div>
+      <div class="toolbar-actions">
+        <div class="sharing-indicator" id="sharingIndicator">
+          <span class="rec-dot"></span> SHARING
+        </div>
+        <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
+          🖥 Share Screen
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openInviteModal()">Invite</button>
+        <button class="btn btn-danger btn-sm" id="endBtn" style="display:none" onclick="endSession()">End Session</button>
+      </div>
+    </div>
+
+    <!-- Screen share area -->
+    <div class="screen-area">
+      <div class="screen-placeholder" id="screenPlaceholder">
+        <div class="screen-icon">🖥️</div>
+        <h3>No screen being shared</h3>
+        <p>Click "Share Screen" to start sharing,<br>or wait for another participant.</p>
+      </div>
+      <video id="screenVideo" autoplay playsinline></video>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="session-sidebar">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" onclick="sideTab('chat', this)">Chat</button>
+      <button class="sidebar-tab" onclick="sideTab('people', this)">People</button>
+      <button class="sidebar-tab" onclick="sideTab('invite', this)">Invite</button>
+    </div>
+
+    <!-- Chat panel -->
+    <div class="sidebar-panel active" id="panel-chat">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Message…" maxlength="500" autocomplete="off">
+        <button class="btn btn-primary btn-sm" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+
+    <!-- People panel -->
+    <div class="sidebar-panel" id="panel-people">
+      <div class="participants-panel" id="participantsList"></div>
+    </div>
+
+    <!-- Invite panel -->
+    <div class="sidebar-panel" id="panel-invite">
+      <div class="invite-panel">
+        <div class="alert alert-info show" style="margin-bottom:16px">
+          Share the session code below with anyone you want to invite.
+        </div>
+        <div style="text-align:center;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:24px;margin-bottom:20px">
+          <div style="font-family:'Courier New',monospace;font-size:2rem;font-weight:900;color:var(--accent);letter-spacing:4px" id="inviteCodeBig"></div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="copyCode()">Copy Code</button>
+        </div>
+        <div class="form-group">
+          <label>Or send invite emails</label>
+          <div class="tags-wrap" id="inviteTagsWrap">
+            <input type="text" id="inviteEmailInput" placeholder="Type email and press Enter…">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="sendInvitesInSession()">Send Invites</button>
+        <div id="inviteSessionAlert" class="alert" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Invite Modal (from toolbar) ───────────────────────────────────────── -->
+<div class="overlay" id="inviteOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Invite to Session</h2>
+      <button class="modal-close" onclick="closeOverlay('inviteOverlay')">&times;</button>
+    </div>
+    <p style="color:var(--txt2);font-size:0.88rem;margin-bottom:16px">
+      Code: <strong id="modalCode" style="color:var(--accent);font-family:'Courier New',monospace;letter-spacing:2px"></strong>
+    </p>
+    <div id="modalInviteAlert" class="alert alert-err"></div>
+    <div class="form-group">
+      <label>Email Addresses</label>
+      <div class="tags-wrap" id="modalTagsWrap">
+        <input type="text" id="modalEmailInput" placeholder="Type email and press Enter…">
+      </div>
+      <p style="color:var(--txt3);font-size:0.75rem;margin-top:6px">Press Enter or comma after each</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('inviteOverlay')">Cancel</button>
+      <button class="btn btn-primary" id="modalInviteBtn" onclick="sendModalInvites()">Send Invites</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="/js/app.js"></script>
+<script>
+  if (!requireAuth()) void 0;
+
+  const CODE = new URLSearchParams(location.search).get('code')?.toUpperCase();
+  if (!CODE) { window.location.href = '/dashboard'; }
+
+  const ME = getUsername();
+  document.getElementById('navUser').textContent = ME;
+  document.getElementById('codeDisplay').textContent = CODE;
+  document.getElementById('inviteCodeBig').textContent = CODE;
+  document.getElementById('modalCode').textContent = CODE;
+
+  let sessionData = null;
+  let isHost = false;
+  let socket = null;
+
+  // WebRTC state
+  let localStream = null;       // screen share stream (when we're the sharer)
+  let isSharing = false;
+  const peerConns = new Map();  // socketId -> RTCPeerConnection (as viewer, receiving)
+  const outConns  = new Map();  // socketId -> RTCPeerConnection (as sharer, sending to viewer)
+  const iceBuf    = new Map();  // socketId -> [RTCIceCandidate] buffered before remoteDescription is set
+
+  const ICE_CONFIG = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+
+  // Flush buffered ICE candidates once remote description is ready
+  async function drainIceBuf(pc, socketId) {
+    const buf = iceBuf.get(socketId) || [];
+    iceBuf.delete(socketId);
+    for (const c of buf) {
+      try { await pc.addIceCandidate(c); } catch {}
+    }
+  }
+
+  // ── Load session data ──────────────────────────────────────────────────────
+  async function init() {
+    try {
+      sessionData = await API.get(`/api/sessions/${CODE}`);
+      document.getElementById('sessionTitle').textContent = sessionData.title;
+      document.title = `${CODE} — Wish Fish Coding`;
+      isHost = sessionData.host_username === ME;
+      document.getElementById('endBtn').style.display = isHost ? '' : 'none';
+
+      // Load chat history
+      for (const msg of sessionData.messages) {
+        appendChatMsg(msg.username, msg.content, msg.created_at);
+      }
+      connectSocket();
+    } catch (err) {
+      toast('Session not found or you do not have access.', 'err');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+    }
+  }
+
+  // ── Socket.io ──────────────────────────────────────────────────────────────
+  function connectSocket() {
+    socket = io({ auth: { token: getToken() } });
+
+    socket.on('connect', () => {
+      socket.emit('join-session', { code: CODE });
+    });
+
+    socket.on('connect_error', err => {
+      toast(`Connection error: ${err.message}`, 'err');
+    });
+
+    socket.on('room-state', ({ peers, sharerId }) => {
+      renderParticipants(peers.concat([{ socketId: socket.id, username: ME }]));
+      // If someone is already sharing, request their stream
+      if (sharerId && sharerId !== socket.id) {
+        socket.emit('request-stream', { sharerSocketId: sharerId });
+      }
+    });
+
+    socket.on('participants-update', users => {
+      renderParticipants(users);
+    });
+
+    socket.on('user-joined', ({ username }) => {
+      appendSystemMsg(`${username} joined`);
+    });
+
+    socket.on('user-left', ({ username }) => {
+      appendSystemMsg(`${username} left`);
+    });
+
+    socket.on('chat-message', ({ username, content, timestamp }) => {
+      appendChatMsg(username, content, timestamp);
+    });
+
+    socket.on('session-ended', () => {
+      toast('Session ended by host', 'err');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
+    });
+
+    socket.on('error', ({ message }) => {
+      toast(message, 'err');
+    });
+
+    // ── Screen share signals ───────────────────────────────────────────────
+
+    // Another user started sharing — we'll receive an offer via viewer-wants-stream flow
+    socket.on('screen-share-started', ({ socketId, username }) => {
+      appendSystemMsg(`${username} started screen sharing`);
+      // Request their stream
+      socket.emit('request-stream', { sharerSocketId: socketId });
+    });
+
+    socket.on('screen-share-stopped', ({ socketId }) => {
+      appendSystemMsg('Screen sharing stopped');
+      // Clean up receiver peer conn
+      if (peerConns.has(socketId)) {
+        peerConns.get(socketId).close();
+        peerConns.delete(socketId);
+      }
+      const video = document.getElementById('screenVideo');
+      video.srcObject = null;
+      video.style.display = 'none';
+      document.getElementById('screenPlaceholder').style.display = '';
+    });
+
+    // Sharer: a new viewer wants our stream
+    socket.on('viewer-wants-stream', async ({ viewerSocketId }) => {
+      if (!localStream) return;
+      try {
+        const pc = createOutConn(viewerSocketId);
+        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        // Send the negotiated description (may differ from raw offer after setLocalDescription)
+        socket.emit('webrtc-offer', { offer: pc.localDescription, targetSocketId: viewerSocketId });
+      } catch (err) {
+        console.error('[WebRTC] viewer-wants-stream error:', err);
+      }
+    });
+
+    // Viewer: receive offer from sharer
+    socket.on('webrtc-offer', async ({ offer, fromSocketId }) => {
+      try {
+        const pc = createInConn(fromSocketId);
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await drainIceBuf(pc, fromSocketId); // apply any candidates that arrived early
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-answer', { answer: pc.localDescription, targetSocketId: fromSocketId });
+      } catch (err) {
+        console.error('[WebRTC] webrtc-offer error:', err);
+        toast('Screen share connection failed', 'err');
+      }
+    });
+
+    // Sharer: receive answer from viewer
+    socket.on('webrtc-answer', async ({ answer, fromSocketId }) => {
+      const pc = outConns.get(fromSocketId);
+      if (!pc) return;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await drainIceBuf(pc, fromSocketId); // apply any candidates that arrived early
+      } catch (err) {
+        console.error('[WebRTC] webrtc-answer error:', err);
+      }
+    });
+
+    // ICE candidates — buffer them if remote description isn't set yet
+    socket.on('webrtc-ice', ({ candidate, fromSocketId }) => {
+      if (!candidate) return;
+      const pc = peerConns.get(fromSocketId) || outConns.get(fromSocketId);
+      const iceCandidate = new RTCIceCandidate(candidate);
+      if (pc && pc.remoteDescription) {
+        pc.addIceCandidate(iceCandidate).catch(() => {});
+      } else {
+        // PC doesn't exist yet or remote description not set — buffer it
+        if (!iceBuf.has(fromSocketId)) iceBuf.set(fromSocketId, []);
+        iceBuf.get(fromSocketId).push(iceCandidate);
+      }
+    });
+  }
+
+  // ── WebRTC helpers ─────────────────────────────────────────────────────────
+  function createOutConn(viewerSocketId) {
+    if (outConns.has(viewerSocketId)) outConns.get(viewerSocketId).close();
+    const pc = new RTCPeerConnection(ICE_CONFIG);
+    outConns.set(viewerSocketId, pc);
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: viewerSocketId });
+    };
+    pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] outConn ${viewerSocketId}: ${pc.connectionState}`);
+    };
+    return pc;
+  }
+
+  function createInConn(sharerSocketId) {
+    if (peerConns.has(sharerSocketId)) peerConns.get(sharerSocketId).close();
+    const pc = new RTCPeerConnection(ICE_CONFIG);
+    peerConns.set(sharerSocketId, pc);
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: sharerSocketId });
+    };
+    pc.ontrack = ({ streams }) => {
+      console.log('[WebRTC] received remote track');
+      const video = document.getElementById('screenVideo');
+      video.srcObject = streams[0];
+      video.style.display = 'block';
+      document.getElementById('screenPlaceholder').style.display = 'none';
+    };
+    pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] inConn ${sharerSocketId}: ${pc.connectionState}`);
+      if (pc.connectionState === 'failed') toast('Screen share connection failed', 'err');
+    };
+    return pc;
+  }
+
+  // ── Screen sharing ─────────────────────────────────────────────────────────
+  async function toggleScreenShare() {
+    if (isSharing) {
+      stopSharing();
+    } else {
+      await startSharing();
+    }
+  }
+
+  async function startSharing() {
+    const btn = document.getElementById('shareBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Starting…';
+
+    try {
+      // audio:false avoids macOS system-audio permission failure that silently aborts
+      localStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+    } catch (err) {
+      btn.disabled = false;
+      btn.innerHTML = '🖥 Share Screen';
+      btn.className = 'btn btn-secondary btn-sm';
+      if (err.name === 'NotAllowedError') {
+        toast('Screen sharing blocked. On macOS: System Settings → Privacy → Screen Recording → enable Chrome, then restart Chrome.', 'err');
+      } else if (err.name === 'NotFoundError') {
+        toast('No screen found to share.', 'err');
+      } else {
+        toast('Screen share failed: ' + err.message, 'err');
+      }
+      return;
+    }
+
+    isSharing = true;
+    btn.disabled = false;
+    btn.innerHTML = '⏹ Stop Sharing';
+    btn.className = 'btn btn-danger btn-sm';
+    document.getElementById('sharingIndicator').style.display = 'flex';
+
+    // Show own screen locally immediately
+    const video = document.getElementById('screenVideo');
+    video.srcObject = localStream;
+    video.style.display = 'block';
+    document.getElementById('screenPlaceholder').style.display = 'none';
+
+    socket.emit('screen-share-start');
+
+    // When user stops via the browser's built-in "Stop sharing" button
+    localStream.getVideoTracks()[0].addEventListener('ended', () => stopSharing());
+  }
+
+  function stopSharing() {
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = null;
+    }
+    outConns.forEach(pc => pc.close());
+    outConns.clear();
+    isSharing = false;
+
+    const btn = document.getElementById('shareBtn');
+    btn.innerHTML = '🖥 Share Screen';
+    btn.className = 'btn btn-secondary btn-sm';
+    btn.disabled = false;
+    document.getElementById('sharingIndicator').style.display = 'none';
+
+    const video = document.getElementById('screenVideo');
+    video.srcObject = null;
+    video.style.display = 'none';
+    document.getElementById('screenPlaceholder').style.display = '';
+
+    socket.emit('screen-share-stop');
+  }
+
+  // ── Chat ───────────────────────────────────────────────────────────────────
+  function appendChatMsg(username, content, timestamp) {
+    const el = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    const isMe = username === ME;
+    div.innerHTML = `
+      <div class="msg-meta">
+        <span class="msg-user${isMe ? ' me' : ''}">${esc(username)}</span>
+        <span class="msg-time">${fmtTime(timestamp)}</span>
+      </div>
+      <div class="msg-body">${esc(content)}</div>`;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function appendSystemMsg(text) {
+    const el = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'msg-system';
+    div.textContent = text;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const content = input.value.trim();
+    if (!content || !socket) return;
+    socket.emit('chat-message', { content });
+    input.value = '';
+  }
+
+  document.getElementById('chatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // ── Participants ───────────────────────────────────────────────────────────
+  function renderParticipants(list) {
+    const el = document.getElementById('participantsList');
+    el.innerHTML = list.map(p => {
+      const initial = (p.username || '?')[0].toUpperCase();
+      const hostTag = sessionData && p.username === sessionData.host_username
+        ? '<span class="p-host">HOST</span>' : '';
+      return `<div class="participant">
+        <div class="avatar">${initial}</div>
+        <div class="p-name">${esc(p.username)}${hostTag}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── End session (host only) ────────────────────────────────────────────────
+  async function endSession() {
+    if (!confirm('End this session for everyone?')) return;
+    try {
+      await API.delete(`/api/sessions/${CODE}`);
+      window.location.href = '/dashboard';
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  }
+
+  // ── Copy code ──────────────────────────────────────────────────────────────
+  function copyCode() {
+    navigator.clipboard.writeText(CODE).then(() => toast('Code copied!', 'ok'));
+  }
+
+  // ── Sidebar tabs ───────────────────────────────────────────────────────────
+  function sideTab(name, el) {
+    document.querySelectorAll('.sidebar-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(`panel-${name}`).classList.add('active');
+  }
+
+  // ── Invite (sidebar) ──────────────────────────────────────────────────────
+  let sideTagCtrl = initTagsInput(
+    document.getElementById('inviteTagsWrap'),
+    document.getElementById('inviteEmailInput')
+  );
+
+  async function sendInvitesInSession() {
+    const emails = sideTagCtrl.getTags();
+    const raw = document.getElementById('inviteEmailInput').value.trim();
+    if (raw && raw.includes('@')) emails.push(raw);
+    const alertEl = document.getElementById('inviteSessionAlert');
+    if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
+    try {
+      await API.post(`/api/sessions/${CODE}/invite`, { emails });
+      alertEl.textContent = `Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`;
+      alertEl.className = 'alert alert-ok show';
+    } catch (err) {
+      alertEl.textContent = err.message;
+      alertEl.className = 'alert alert-err show';
+    }
+  }
+
+  // ── Invite modal (toolbar) ─────────────────────────────────────────────────
+  let modalTagCtrl = null;
+
+  function openInviteModal() {
+    document.getElementById('modalInviteAlert').className = 'alert';
+    const wrap = document.getElementById('modalTagsWrap');
+    wrap.querySelectorAll('.tag').forEach(t => t.remove());
+    document.getElementById('modalEmailInput').value = '';
+    modalTagCtrl = initTagsInput(wrap, document.getElementById('modalEmailInput'));
+    openOverlay('inviteOverlay');
+  }
+
+  async function sendModalInvites() {
+    const emails = modalTagCtrl.getTags();
+    const raw = document.getElementById('modalEmailInput').value.trim();
+    if (raw && raw.includes('@')) emails.push(raw);
+    const alertEl = document.getElementById('modalInviteAlert');
+    if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
+    const btn = document.getElementById('modalInviteBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await API.post(`/api/sessions/${CODE}/invite`, { emails });
+      closeOverlay('inviteOverlay');
+      toast(`Invites sent!`, 'ok');
+    } catch (err) {
+      alertEl.textContent = err.message;
+      alertEl.className = 'alert alert-err show';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send Invites';
+    }
+  }
+
+  function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
+  function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+  document.querySelectorAll('.overlay').forEach(o => {
+    o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+  });
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>

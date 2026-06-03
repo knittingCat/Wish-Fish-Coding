@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wish Fish Coding — Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <a href="/dashboard" class="brand"><span class="fish">🐟</span> <span>Wish Fish Coding</span></a>
+  <div class="nav-right">
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="dash-wrap">
+  <div class="page-title">My Sessions</div>
+
+  <!-- Join bar -->
+  <div class="join-bar">
+    <input type="text" id="joinCode" placeholder="Enter session code (e.g. FEGH694)" maxlength="7">
+    <button class="btn btn-primary" onclick="joinSession()">Join Session</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-row">
+    <button class="tab-btn active" onclick="switchTab('all', this)">All Sessions</button>
+    <button class="tab-btn" onclick="switchTab('live', this)">Live</button>
+    <button class="tab-btn" onclick="switchTab('scheduled', this)">Scheduled</button>
+  </div>
+
+  <div class="section-header">
+    <span class="section-title" id="listLabel">All</span>
+    <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Session</button>
+  </div>
+
+  <div id="sessionsGrid" class="sessions-grid"></div>
+</div>
+
+<!-- ── Create Session Modal ──────────────────────────────────────────────── -->
+<div class="overlay" id="createOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Create Session</h2>
+      <button class="modal-close" onclick="closeOverlay('createOverlay')">&times;</button>
+    </div>
+    <div id="createAlert" class="alert alert-err"></div>
+    <div class="form-group">
+      <label for="sessTitle">Session Title</label>
+      <input type="text" id="sessTitle" placeholder="e.g. Robot Navigation Project" maxlength="80">
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="isScheduled" onchange="toggleScheduled()">
+      <label for="isScheduled" style="margin:0;text-transform:none;letter-spacing:0;font-size:0.9rem">Schedule for later</label>
+    </div>
+    <div id="scheduledFields" style="display:none">
+      <div class="form-group">
+        <label for="schedTime">Date &amp; Time</label>
+        <input type="datetime-local" id="schedTime">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('createOverlay')">Cancel</button>
+      <button class="btn btn-primary" id="createBtn" onclick="createSession()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Invite Modal ───────────────────────────────────────────────────────── -->
+<div class="overlay" id="inviteOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Invite People</h2>
+      <button class="modal-close" onclick="closeOverlay('inviteOverlay')">&times;</button>
+    </div>
+    <p style="color:var(--txt2);font-size:0.88rem;margin-bottom:16px">
+      Session: <strong id="inviteCode" style="color:var(--accent);font-family:'Courier New',monospace;letter-spacing:2px"></strong>
+    </p>
+    <div id="inviteAlert" class="alert alert-err"></div>
+    <div class="form-group">
+      <label>Email Addresses</label>
+      <div class="tags-wrap" id="tagsWrap">
+        <input type="text" id="emailInput" placeholder="Type email and press Enter…">
+      </div>
+      <p style="color:var(--txt3);font-size:0.75rem;margin-top:6px">Press Enter or comma after each email</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('inviteOverlay')">Cancel</button>
+      <button class="btn btn-primary" id="inviteBtn" onclick="sendInvites()">Send Invites</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete Confirm Modal ───────────────────────────────────────────────── -->
+<div class="overlay" id="deleteOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>End Session?</h2>
+      <button class="modal-close" onclick="closeOverlay('deleteOverlay')">&times;</button>
+    </div>
+    <p style="color:var(--txt2);font-size:0.9rem;margin-bottom:20px">
+      This will end the session and disconnect all participants.
+      Session code: <strong id="deleteCode" style="color:var(--accent)"></strong>
+    </p>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('deleteOverlay')">Cancel</button>
+      <button class="btn btn-danger" id="deleteBtn" onclick="confirmDelete()">End Session</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  if (!requireAuth()) void 0;
+
+  document.getElementById('navUser').textContent = getUsername() || '';
+
+  let allSessions = [];
+  let currentTab = 'all';
+  let inviteTarget = null;
+  let deleteTarget = null;
+  let tagController = null;
+
+  // ── Load sessions ──────────────────────────────────────────────────────────
+  async function loadSessions() {
+    try {
+      allSessions = await API.get('/api/sessions');
+      renderSessions();
+    } catch (err) {
+      if (err.message.includes('Invalid token') || err.message.includes('No token')) logout();
+    }
+  }
+
+  function renderSessions() {
+    const grid = document.getElementById('sessionsGrid');
+    let list = allSessions;
+    if (currentTab === 'live')      list = list.filter(s => s.is_active && !s.is_scheduled);
+    if (currentTab === 'scheduled') list = list.filter(s => s.is_scheduled);
+
+    document.getElementById('listLabel').textContent =
+      currentTab === 'all' ? 'All' : currentTab === 'live' ? 'Live' : 'Scheduled';
+
+    if (!list.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🐠</div>
+        <h3>No sessions yet</h3>
+        <p>Create a new session or join one with a code.</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = list.map(s => {
+      const badge = s.is_scheduled
+        ? `<span class="badge badge-sched">📅 Scheduled</span>`
+        : s.is_active
+          ? `<span class="badge badge-live">● Live</span>`
+          : `<span class="badge badge-ended">Ended</span>`;
+      const timeInfo = s.is_scheduled && s.scheduled_time
+        ? `<span class="sess-time">${fmtDateTime(s.scheduled_time)}</span>` : '';
+      return `
+        <div class="sess-card" onclick="openSession('${s.code}')">
+          <div class="sess-code">${s.code}</div>
+          <div class="sess-title">${esc(s.title)}</div>
+          <div class="sess-meta">${badge}${timeInfo}</div>
+          <div class="sess-meta">
+            <span style="color:var(--txt3);font-size:0.78rem">👥 ${s.participant_count} joined · 📧 ${s.invite_count} invited</span>
+          </div>
+          <div class="sess-card-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-secondary btn-sm" onclick="openInvite('${s.code}')">Invite</button>
+            ${s.is_active ? `<button class="btn btn-danger btn-sm" onclick="openDelete('${s.code}')">End</button>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function switchTab(tab, el) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderSessions();
+  }
+
+  function openSession(code) {
+    window.location.href = `/session?code=${code}`;
+  }
+
+  // ── Join ───────────────────────────────────────────────────────────────────
+  function joinSession() {
+    const code = document.getElementById('joinCode').value.trim().toUpperCase();
+    if (code.length < 6) { toast('Enter a valid session code', 'err'); return; }
+    window.location.href = `/session?code=${code}`;
+  }
+  document.getElementById('joinCode').addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinSession();
+  });
+
+  // ── Create ─────────────────────────────────────────────────────────────────
+  function openCreateModal() {
+    document.getElementById('sessTitle').value = '';
+    document.getElementById('isScheduled').checked = false;
+    document.getElementById('scheduledFields').style.display = 'none';
+    document.getElementById('createAlert').className = 'alert';
+    openOverlay('createOverlay');
+  }
+
+  function toggleScheduled() {
+    const on = document.getElementById('isScheduled').checked;
+    document.getElementById('scheduledFields').style.display = on ? 'block' : 'none';
+  }
+
+  async function createSession() {
+    const title = document.getElementById('sessTitle').value.trim();
+    const isScheduled = document.getElementById('isScheduled').checked;
+    const schedTime = document.getElementById('schedTime').value;
+    const alertEl = document.getElementById('createAlert');
+
+    if (!title) { alertEl.textContent = 'Title is required'; alertEl.className = 'alert alert-err show'; return; }
+    if (isScheduled && !schedTime) { alertEl.textContent = 'Please pick a date and time'; alertEl.className = 'alert alert-err show'; return; }
+
+    const btn = document.getElementById('createBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const sess = await API.post('/api/sessions', {
+        title,
+        is_scheduled: isScheduled,
+        scheduled_time: schedTime ? new Date(schedTime).toISOString() : null
+      });
+      closeOverlay('createOverlay');
+      toast(`Session ${sess.code} created!`, 'ok');
+      await loadSessions();
+    } catch (err) {
+      alertEl.textContent = err.message;
+      alertEl.className = 'alert alert-err show';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create';
+    }
+  }
+
+  // ── Invite ─────────────────────────────────────────────────────────────────
+  function openInvite(code) {
+    inviteTarget = code;
+    document.getElementById('inviteCode').textContent = code;
+    document.getElementById('inviteAlert').className = 'alert';
+    // Reset tags
+    const wrap = document.getElementById('tagsWrap');
+    wrap.querySelectorAll('.tag').forEach(t => t.remove());
+    document.getElementById('emailInput').value = '';
+    tagController = initTagsInput(wrap, document.getElementById('emailInput'));
+    openOverlay('inviteOverlay');
+  }
+
+  async function sendInvites() {
+    const emails = tagController.getTags();
+    const raw = document.getElementById('emailInput').value.trim();
+    if (raw && raw.includes('@')) emails.push(raw);
+    const alertEl = document.getElementById('inviteAlert');
+
+    if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
+
+    const btn = document.getElementById('inviteBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await API.post(`/api/sessions/${inviteTarget}/invite`, { emails });
+      closeOverlay('inviteOverlay');
+      toast(`Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`, 'ok');
+      await loadSessions();
+    } catch (err) {
+      alertEl.textContent = err.message;
+      alertEl.className = 'alert alert-err show';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send Invites';
+    }
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  function openDelete(code) {
+    deleteTarget = code;
+    document.getElementById('deleteCode').textContent = code;
+    openOverlay('deleteOverlay');
+  }
+
+  async function confirmDelete() {
+    const btn = document.getElementById('deleteBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await API.delete(`/api/sessions/${deleteTarget}`);
+      closeOverlay('deleteOverlay');
+      toast('Session ended', 'ok');
+      await loadSessions();
+    } catch (err) {
+      toast(err.message, 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = 'End Session';
+    }
+  }
+
+  // ── Overlay helpers ────────────────────────────────────────────────────────
+  function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
+  function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.querySelectorAll('.overlay').forEach(o => {
+    o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+  });
+
+  // ── Escape html ────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadSessions();
+</script>
+</body>
+</html>
