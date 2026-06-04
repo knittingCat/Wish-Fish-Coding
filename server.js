@@ -309,7 +309,7 @@ io.on('connection', (socket) => {
 
     if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false });
     const state = roomState.get(room);
-    state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id });
+    state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id, suspended: false, flagged: false });
 
     await pool.query(
       'INSERT INTO participants (session_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
@@ -324,6 +324,8 @@ io.on('connection', (socket) => {
 
   socket.on('chat-message', async ({ content }) => {
     if (!socket.sessionCode || !content?.trim()) return;
+    const roomSt = roomState.get(socket.sessionCode);
+    if (roomSt?.participants.get(socket.id)?.suspended) return;
     const text = content.trim();
     await pool.query(
       'INSERT INTO messages (session_id,user_id,username,content) VALUES ($1,$2,$3,$4)',
@@ -349,6 +351,10 @@ io.on('connection', (socket) => {
   socket.on('screen-share-start', () => {
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
+    if (state?.participants.get(socket.id)?.suspended) {
+      socket.emit('error', { message: 'Your activities are suspended by the host.' });
+      return;
+    }
     if (state) state.sharerIds.add(socket.id);
     socket.to(socket.sessionCode).emit('screen-share-started', { socketId: socket.id, username: socket.user.username });
   });
@@ -372,6 +378,36 @@ io.on('connection', (socket) => {
     if (!state) return;
     state.isLocked = !state.isLocked;
     io.to(socket.sessionCode).emit('lock-state', { isLocked: state.isLocked });
+  });
+
+  async function verifyHost(sock) {
+    if (!sock.sessionCode) return false;
+    const r = await pool.query('SELECT host_id FROM sessions WHERE code=$1', [sock.sessionCode]);
+    return r.rows[0]?.host_id === sock.user.id;
+  }
+
+  socket.on('host-suspend', async ({ targetSocketId }) => {
+    if (!await verifyHost(socket)) return;
+    const state = roomState.get(socket.sessionCode);
+    const target = state?.participants.get(targetSocketId);
+    if (!target) return;
+    target.suspended = !target.suspended;
+    io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
+    io.to(targetSocketId).emit(target.suspended ? 'you-are-suspended' : 'you-are-unsuspended');
+  });
+
+  socket.on('host-flag', async ({ targetSocketId }) => {
+    if (!await verifyHost(socket)) return;
+    const state = roomState.get(socket.sessionCode);
+    const target = state?.participants.get(targetSocketId);
+    if (!target) return;
+    target.flagged = !target.flagged;
+    io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
+  });
+
+  socket.on('host-remove', async ({ targetSocketId }) => {
+    if (!await verifyHost(socket)) return;
+    io.to(targetSocketId).emit('you-were-removed');
   });
 
   socket.on('disconnect', () => {

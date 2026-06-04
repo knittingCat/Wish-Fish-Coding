@@ -293,6 +293,19 @@
       setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
     });
 
+    socket.on('you-were-removed', () => {
+      toast('You have been removed from this session.', 'err');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+    });
+
+    socket.on('you-are-suspended', () => {
+      toast('Your activities have been suspended by the host.', 'err');
+    });
+
+    socket.on('you-are-unsuspended', () => {
+      toast('Your activities have been resumed by the host.', 'ok');
+    });
+
     socket.on('error', ({ message }) => {
       toast(message, 'err');
     });
@@ -532,11 +545,50 @@
       const initial = (p.username || '?')[0].toUpperCase();
       const hostTag = sessionData && p.username === sessionData.host_username
         ? '<span class="p-host">HOST</span>' : '';
+      const suspTag = p.suspended ? '<span class="p-suspended">SUSPENDED</span>' : '';
+      const flagTag = p.flagged   ? '<span class="p-flagged">FLAGGED</span>'   : '';
+      const isSelf  = p.socketId === socket?.id;
+      const menuHtml = isHost && !isSelf ? `
+        <div class="p-menu-wrap">
+          <button class="p-menu-btn" onclick="togglePMenu(event,'${p.socketId}')">···</button>
+          <div class="p-menu-dropdown" id="pmenu-${p.socketId}">
+            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}','${esc(p.username)}')">Suspend ${esc(p.username)}'s Activities</button>
+            <button class="p-menu-item" onclick="hostFlag('${p.socketId}','${esc(p.username)}')">Flag ${esc(p.username)}</button>
+            <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>
+          </div>
+        </div>` : '';
       return `<div class="participant">
         <div class="avatar">${initial}</div>
-        <div class="p-name">${esc(p.username)}${hostTag}</div>
+        <div class="p-name">${esc(p.username)}${hostTag}${suspTag}${flagTag}</div>
+        ${menuHtml}
       </div>`;
     }).join('');
+  }
+
+  function togglePMenu(e, socketId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`pmenu-${socketId}`);
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+  }
+
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+  });
+
+  function hostSuspend(socketId) {
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    socket.emit('host-suspend', { targetSocketId: socketId });
+  }
+  function hostFlag(socketId) {
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    socket.emit('host-flag', { targetSocketId: socketId });
+  }
+  function hostRemove(socketId, username) {
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    if (!confirm(`Remove ${username} from the session?`)) return;
+    socket.emit('host-remove', { targetSocketId: socketId });
   }
 
   // ── End session (host only) ────────────────────────────────────────────────
