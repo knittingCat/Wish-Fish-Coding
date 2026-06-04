@@ -566,13 +566,19 @@
       const suspTag = p.suspended ? '<span class="p-suspended">SUSPENDED</span>' : '';
       const flagTag = p.flagged   ? '<span class="p-flagged">FLAGGED</span>'   : '';
       const isSelf  = p.socketId === socket?.id;
-      const menuHtml = isHost && !isSelf ? `
+      const canAct  = !isSelf;
+      const flagItem = !p.flagged
+        ? `<button class="p-menu-item" onclick="flagUser('${p.socketId}')">Flag ${esc(p.username)}</button>`
+        : '';
+      const hostItems = isHost ? `
+            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
+            <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>` : '';
+      const menuHtml = canAct && (flagItem || hostItems) ? `
         <div class="p-menu-wrap">
           <button class="p-menu-btn" onclick="togglePMenu(event,'${p.socketId}')">···</button>
           <div class="p-menu-dropdown" id="pmenu-${p.socketId}">
-            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
-            ${!p.flagged ? `<button class="p-menu-item" onclick="hostFlag('${p.socketId}')">Flag ${esc(p.username)}</button>` : ''}
-            <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>
+            ${hostItems}
+            ${flagItem}
           </div>
         </div>` : '';
       return `<div class="participant">
@@ -599,9 +605,9 @@
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
     socket.emit('host-suspend', { targetSocketId: socketId });
   }
-  function hostFlag(socketId) {
+  function flagUser(socketId) {
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
-    socket.emit('host-flag', { targetSocketId: socketId });
+    socket.emit('flag-user', { targetSocketId: socketId });
   }
   function hostRemove(socketId, username) {
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));

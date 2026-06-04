@@ -424,8 +424,8 @@ io.on('connection', (socket) => {
     io.to(targetSocketId).emit(target.suspended ? 'you-are-suspended' : 'you-are-unsuspended');
   });
 
-  socket.on('host-flag', async ({ targetSocketId }) => {
-    if (!await verifyHost(socket)) return;
+  socket.on('flag-user', async ({ targetSocketId }) => {
+    if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
     const target = state?.participants.get(targetSocketId);
     if (!target || target.flagged) return;
