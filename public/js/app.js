@@ -6,7 +6,7 @@ const API = {
       method,
       headers: { 'Content-Type': 'application/json' }
     };
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) opts.headers['Authorization'] = `Bearer ${token}`;
     if (data) opts.body = JSON.stringify(data);
     const res = await fetch(path, opts);
@@ -19,8 +19,8 @@ const API = {
   delete: (path)       => API.req('DELETE', path)
 };
 
-function getToken()    { return localStorage.getItem('token'); }
-function getUsername() { return localStorage.getItem('username'); }
+function getToken()    { return sessionStorage.getItem('token'); }
+function getUsername() { return sessionStorage.getItem('username'); }
 
 function requireAuth() {
   if (!getToken()) { window.location.href = '/'; return false; }
@@ -28,8 +28,8 @@ function requireAuth() {
 }
 
 function logout() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('username');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('username');
   window.location.href = '/';
 }
 

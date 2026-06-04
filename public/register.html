@@ -59,8 +59,8 @@
         username: document.getElementById('username').value.trim(),
         password: document.getElementById('password').value
       });
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('username', data.username);
+      sessionStorage.setItem('token', data.token);
+      sessionStorage.setItem('username', data.username);
       window.location.href = '/dashboard';
     } catch (err) {
       alertEl.textContent = err.message;
