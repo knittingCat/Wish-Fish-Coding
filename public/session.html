@@ -165,6 +165,7 @@
     document.getElementById('screensGrid').appendChild(tile);
     updateScreenArea();
     video.play().catch(() => {});
+    video.addEventListener('loadeddata', () => video.play().catch(() => {}), { once: true });
   }
 
   function removeVideoTile(id) {
@@ -358,13 +359,29 @@
     if (peerConns.has(sharerSocketId)) peerConns.get(sharerSocketId).close();
     const pc = new RTCPeerConnection(ICE_CONFIG);
     peerConns.set(sharerSocketId, pc);
+
+    // Hold the stream until ICE is connected — frames don't flow until then
+    let pendingStream = null;
+    let iceConnected = false;
+
+    function maybeShowTile() {
+      if (pendingStream && iceConnected) {
+        addVideoTile(sharerSocketId, sharerUsername || sharerSocketId, pendingStream);
+      }
+    }
+
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: sharerSocketId });
     };
     pc.ontrack = ({ streams }) => {
-      addVideoTile(sharerSocketId, sharerUsername || sharerSocketId, streams[0]);
+      pendingStream = streams[0];
+      maybeShowTile();
     };
     pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        iceConnected = true;
+        maybeShowTile();
+      }
       if (pc.connectionState === 'failed') {
         toast('Screen share connection failed', 'err');
         removeVideoTile(sharerSocketId);
