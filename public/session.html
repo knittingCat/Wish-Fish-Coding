@@ -17,6 +17,16 @@
   </div>
 </nav>
 
+<!-- Join Gate (covers everything until socket join succeeds or is rejected) -->
+<div id="sessionGate" class="session-gate">
+  <div class="gate-card">
+    <div id="gateSpinner"><span class="spinner" style="width:28px;height:28px;border-width:3px;margin-bottom:20px;display:inline-block"></span></div>
+    <h2 class="gate-title" id="gateTitle">Joining session…</h2>
+    <p class="gate-msg" id="gateMsg"></p>
+    <a href="/dashboard" class="btn btn-primary" id="gateBtn" style="display:none;margin-top:24px">Back to Dashboard</a>
+  </div>
+</div>
+
 <!-- Session Layout -->
 <div class="session-layout">
 
@@ -253,6 +263,7 @@
     });
 
     socket.on('room-state', ({ peers, sharerIds, isLocked: locked }) => {
+      document.getElementById('sessionGate').style.display = 'none';
       renderParticipants(peers.concat([{ socketId: socket.id, username: ME }]));
       for (const sid of sharerIds || []) {
         if (sid !== socket.id) socket.emit('request-stream', { sharerSocketId: sid });
@@ -289,8 +300,11 @@
     });
 
     socket.on('join-rejected', ({ message }) => {
-      toast(message, 'err');
-      setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+      const isLock = message.toLowerCase().includes('locked');
+      document.getElementById('gateSpinner').style.display = 'none';
+      document.getElementById('gateTitle').textContent = isLock ? 'Session Locked' : 'Access Denied';
+      document.getElementById('gateMsg').textContent = message;
+      document.getElementById('gateBtn').style.display = '';
     });
 
     socket.on('you-were-removed', () => {

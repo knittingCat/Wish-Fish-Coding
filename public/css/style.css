@@ -252,6 +252,21 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   box-shadow: none !important; padding: 4px 6px; font-size: 0.85rem;
 }
 
+/* ── Session gate ──────────────────────────────────────────────────────────── */
+.session-gate {
+  position: fixed; inset: 0; z-index: 600;
+  background: var(--bg0);
+  display: flex; align-items: center; justify-content: center;
+}
+.gate-card {
+  background: #fff; border: 1px solid #d8e6f0;
+  border-radius: 18px; padding: 48px 44px;
+  text-align: center; max-width: 400px; width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,.12);
+}
+.gate-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 10px; color: var(--txt1); }
+.gate-msg   { font-size: 0.9rem; color: var(--txt2); line-height: 1.5; }
+
 /* ── Session page ──────────────────────────────────────────────────────────── */
 .session-layout {
   display: grid; grid-template-columns: 1fr 310px;
