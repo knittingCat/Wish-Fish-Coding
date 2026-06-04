@@ -47,7 +47,7 @@
         <h3>No screen being shared</h3>
         <p>Click "Share Screen" to start sharing,<br>or wait for another participant.</p>
       </div>
-      <video id="screenVideo" autoplay playsinline></video>
+      <video id="screenVideo" autoplay playsinline muted></video>
     </div>
   </div>
 
@@ -333,6 +333,7 @@
       video.srcObject = streams[0];
       video.style.display = 'block';
       document.getElementById('screenPlaceholder').style.display = 'none';
+      video.play().catch(() => {});
     };
     pc.onconnectionstatechange = () => {
       console.log(`[WebRTC] inConn ${sharerSocketId}: ${pc.connectionState}`);
@@ -383,6 +384,7 @@
     video.srcObject = localStream;
     video.style.display = 'block';
     document.getElementById('screenPlaceholder').style.display = 'none';
+    video.play().catch(() => {});
 
     socket.emit('screen-share-start');
 
