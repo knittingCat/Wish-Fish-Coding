@@ -1,3 +1,11 @@
+// Migrate token from localStorage → sessionStorage (one-time, for existing sessions)
+if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
+  sessionStorage.setItem('token',    localStorage.getItem('token'));
+  sessionStorage.setItem('username', localStorage.getItem('username'));
+  localStorage.removeItem('token');
+  localStorage.removeItem('username');
+}
+
 // Shared utilities — included on every page
 
 const API = {
