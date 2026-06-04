@@ -346,7 +346,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .msg-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
 .msg-user { font-size: 0.8rem; font-weight: 800; color: var(--accent2); }
 .msg-user.me { color: #2e7d32; }
-.msg-time { font-size: 0.68rem; color: var(--txt3); }
+.msg-time { font-size: 0.68rem; color: var(--txt3); display: block; }
 .msg-body { font-size: 0.88rem; color: var(--txt1); word-break: break-word; line-height: 1.5; }
 .msg-system { font-size: 0.78rem; color: var(--txt3); text-align: center; padding: 4px 0; }
 .chat-input-row {
@@ -413,6 +413,11 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .audio-mic { font-size: 1rem; flex-shrink: 0; line-height: 1; }
 .audio-name { font-size: 0.88rem; font-weight: 600; color: var(--txt1); flex: 1; min-width: 0; }
 .audio-empty { font-size: 0.82rem; color: var(--txt3); text-align: center; padding: 20px 0; }
+.audio-join-area { text-align: center; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.audio-join-icon { font-size: 2.4rem; line-height: 1; }
+.audio-join-area p { font-size: 0.82rem; color: var(--txt2); line-height: 1.5; }
+.audio-active-area { display: flex; flex-direction: column; gap: 10px; }
+.audio-leave-bar { margin-top: 4px; }
 .audio-live-indicator {
   display: none; align-items: center; gap: 7px;
   color: var(--ok); font-size: 0.76rem; font-weight: 800; letter-spacing: .06em;

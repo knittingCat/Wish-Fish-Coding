@@ -433,6 +433,14 @@ io.on('connection', (socket) => {
     target.suspended = !target.suspended;
     io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
     io.to(targetSocketId).emit(target.suspended ? 'you-are-suspended' : 'you-are-unsuspended');
+    // If suspended while in audio, force-mute immediately
+    if (target.suspended) {
+      const ap = state.audioParticipants.get(targetSocketId);
+      if (ap && !ap.muted) {
+        ap.muted = true;
+        io.to(socket.sessionCode).emit('audio-user-muted', { socketId: targetSocketId, muted: true });
+      }
+    }
   });
 
   socket.on('flag-user', async ({ targetSocketId }) => {
@@ -472,10 +480,11 @@ io.on('connection', (socket) => {
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
     if (!state || !state.participants.has(socket.id)) return;
-    state.audioParticipants.set(socket.id, { socketId: socket.id, username: socket.user.username, muted: false });
+    const isSuspended = state.participants.get(socket.id)?.suspended || false;
+    state.audioParticipants.set(socket.id, { socketId: socket.id, username: socket.user.username, muted: isSuspended });
     const peers = [...state.audioParticipants.values()].filter(p => p.socketId !== socket.id);
     socket.emit('audio-peers', { peers });
-    socket.to(socket.sessionCode).emit('audio-user-joined', { socketId: socket.id, username: socket.user.username, muted: false });
+    socket.to(socket.sessionCode).emit('audio-user-joined', { socketId: socket.id, username: socket.user.username, muted: isSuspended });
   });
 
   socket.on('audio-leave', () => {
@@ -491,6 +500,8 @@ io.on('connection', (socket) => {
     const state = roomState.get(socket.sessionCode);
     const entry = state?.audioParticipants.get(socket.id);
     if (!entry) return;
+    // Suspended users cannot unmute
+    if (!muted && state.participants.get(socket.id)?.suspended) return;
     entry.muted = !!muted;
     io.to(socket.sessionCode).emit('audio-user-muted', { socketId: socket.id, muted: entry.muted });
   });

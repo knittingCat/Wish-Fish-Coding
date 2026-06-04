@@ -43,7 +43,7 @@
           <span class="rec-dot"></span> SHARING
         </div>
         <div class="locked-indicator" id="lockedIndicator">LOCKED</div>
-        <button class="btn btn-mute btn-sm" id="muteBtn" style="display:none" onclick="toggleMute()">🎤 Mute</button>
+        <button class="btn btn-secondary btn-sm" id="muteBtn" style="display:none" onclick="toggleMute()">Mute</button>
         <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
           Share Screen
         </button>
@@ -93,7 +93,7 @@
         <div class="audio-join-area" id="audioJoinArea">
           <div class="audio-join-icon">🎤</div>
           <p>Join the audio channel to speak and listen with other participants.</p>
-          <button class="btn btn-primary btn-sm" onclick="joinAudio()">Join Audio</button>
+          <button class="btn btn-primary btn-sm" id="audioJoinBtn" onclick="joinAudio()">Join Audio</button>
         </div>
         <div class="audio-active-area" id="audioActiveArea" style="display:none">
           <div class="audio-participants-list" id="audioParticipantsList"></div>
@@ -689,6 +689,103 @@
       }
     };
     return pc;
+  }
+
+  // ── Audio helpers ──────────────────────────────────────────────────────────
+  function createAudioConn(socketId) {
+    if (audioConns.has(socketId)) audioConns.get(socketId).close();
+    const pc = new RTCPeerConnection(ICE_CONFIG);
+    audioConns.set(socketId, pc);
+    if (audioStream) audioStream.getAudioTracks().forEach(t => pc.addTrack(t, audioStream));
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) socket.emit('audio-ice', { candidate, targetSocketId: socketId });
+    };
+    pc.ontrack = ({ streams }) => {
+      let el = document.getElementById(`audio-${socketId}`);
+      if (!el) { el = document.createElement('audio'); el.id = `audio-${socketId}`; el.autoplay = true; document.body.appendChild(el); }
+      el.srcObject = streams[0];
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        const el = document.getElementById(`audio-${socketId}`); if (el) el.remove();
+      }
+    };
+    return pc;
+  }
+
+  async function drainAudioBuf(pc, socketId) {
+    const buf = audioIceBuf.get(socketId) || [];
+    audioIceBuf.delete(socketId);
+    for (const c of buf) { try { await pc.addIceCandidate(c); } catch {} }
+  }
+
+  async function joinAudio() {
+    const btn = document.getElementById('audioJoinBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Join Audio';
+      toast(err.name === 'NotAllowedError' ? 'Microphone access denied.' : 'Could not access mic: ' + err.message, 'err');
+      return;
+    }
+    isInAudio = true;
+    if (isSuspended) {
+      isMuted = true;
+      audioStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    }
+    document.getElementById('audioJoinArea').style.display = 'none';
+    document.getElementById('audioActiveArea').style.display = '';
+    if (!isSuspended) {
+      document.getElementById('muteBtn').style.display = '';
+      updateMuteBtn();
+    }
+    audioPeers.set(socket.id, { socketId: socket.id, username: ME, muted: isMuted });
+    renderAudioPeers();
+    socket.emit('audio-join');
+    btn.disabled = false; btn.textContent = 'Join Audio';
+  }
+
+  function leaveAudio() {
+    if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); audioStream = null; }
+    audioConns.forEach(pc => pc.close()); audioConns.clear();
+    audioIceBuf.clear(); audioPeers.clear();
+    document.querySelectorAll('audio[id^="audio-"]').forEach(el => el.remove());
+    isInAudio = false; isMuted = false;
+    document.getElementById('audioJoinArea').style.display = '';
+    document.getElementById('audioActiveArea').style.display = 'none';
+    document.getElementById('muteBtn').style.display = 'none';
+    renderAudioPeers();
+    socket.emit('audio-leave');
+  }
+
+  function toggleMute() {
+    if (!isInAudio || isSuspended) return;
+    isMuted = !isMuted;
+    if (audioStream) audioStream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+    updateMuteBtn();
+    socket.emit('audio-mute', { muted: isMuted });
+  }
+
+  function updateMuteBtn() {
+    const btn = document.getElementById('muteBtn');
+    btn.textContent = isMuted ? 'Unmute' : 'Mute';
+    btn.className = isMuted ? 'btn btn-danger btn-sm' : 'btn btn-secondary btn-sm';
+  }
+
+  function renderAudioPeers() {
+    const list = [...audioPeers.values()];
+    const el = document.getElementById('audioParticipantsList');
+    if (!list.length) {
+      el.innerHTML = '<div class="audio-empty">No one in audio yet.</div>';
+      return;
+    }
+    el.innerHTML = list.map(p => {
+      const mic = p.muted ? '🔇' : '🎙';
+      const self = p.socketId === socket?.id ? ' (you)' : '';
+      return `<div class="audio-participant"><span class="audio-mic">${mic}</span><span class="audio-name">${esc(p.username)}${self}</span></div>`;
+    }).join('');
   }
 
   // ── Screen sharing ─────────────────────────────────────────────────────────
