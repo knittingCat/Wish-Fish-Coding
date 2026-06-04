@@ -178,13 +178,18 @@
         : s.is_active
           ? `<span class="badge badge-live">● Live</span>`
           : `<span class="badge badge-ended">Ended</span>`;
-      const timeInfo = s.is_scheduled && s.scheduled_time
-        ? `<span class="sess-time">${fmtDateTime(s.scheduled_time)}</span>` : '';
+      const schedTime = s.is_scheduled && s.scheduled_time
+        ? `<span class="sess-time">📅 ${fmtDateTime(s.scheduled_time)}</span>` : '';
+      const createdTime = `<span class="sess-time">🕐 Created ${fmtDateTime(s.created_at)}</span>`;
       return `
         <div class="sess-card" onclick="openSession('${s.code}')">
           <div class="sess-code">${s.code}</div>
           <div class="sess-title">${esc(s.title)}</div>
-          <div class="sess-meta">${badge}${timeInfo}</div>
+          <div class="sess-meta">${badge}</div>
+          <div class="sess-meta" style="flex-direction:column;gap:4px">
+            ${schedTime}
+            ${createdTime}
+          </div>
           <div class="sess-meta">
             <span style="color:var(--txt3);font-size:0.78rem">👥 ${s.participant_count} joined · 📧 ${s.invite_count} invited</span>
           </div>
