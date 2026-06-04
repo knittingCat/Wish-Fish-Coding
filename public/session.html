@@ -194,9 +194,11 @@
   };
 
   // Flush buffered ICE candidates once remote description is ready
-  async function drainIceBuf(pc, socketId) {
-    const buf = iceBuf.get(socketId) || [];
-    iceBuf.delete(socketId);
+  // type: 'out' = candidates from a sharer's outConn, 'in' = from a viewer's peerConn
+  async function drainIceBuf(pc, socketId, type) {
+    const key = `${socketId}-${type}`;
+    const buf = iceBuf.get(key) || [];
+    iceBuf.delete(key);
     for (const c of buf) {
       try { await pc.addIceCandidate(c); } catch {}
     }
@@ -304,7 +306,7 @@
       try {
         const pc = createInConn(fromSocketId, username);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        await drainIceBuf(pc, fromSocketId); // apply any candidates that arrived early
+        await drainIceBuf(pc, fromSocketId, 'out'); // sharer sent type:'out' candidates
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('webrtc-answer', { answer: pc.localDescription, targetSocketId: fromSocketId });
@@ -320,23 +322,25 @@
       if (!pc) return;
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        await drainIceBuf(pc, fromSocketId); // apply any candidates that arrived early
+        await drainIceBuf(pc, fromSocketId, 'in'); // viewer sent type:'in' candidates
       } catch (err) {
         console.error('[WebRTC] webrtc-answer error:', err);
       }
     });
 
-    // ICE candidates — buffer them if remote description isn't set yet
-    socket.on('webrtc-ice', ({ candidate, fromSocketId }) => {
+    // ICE candidates — route by type so each connection gets its own candidates
+    // 'out' = from a sharer → belongs on our peerConn (we're receiving their share)
+    // 'in'  = from a viewer → belongs on our outConn (we're sending to them)
+    socket.on('webrtc-ice', ({ candidate, fromSocketId, type }) => {
       if (!candidate) return;
-      const pc = peerConns.get(fromSocketId) || outConns.get(fromSocketId);
+      const pc = type === 'out' ? peerConns.get(fromSocketId) : outConns.get(fromSocketId);
+      const bufKey = `${fromSocketId}-${type}`;
       const iceCandidate = new RTCIceCandidate(candidate);
       if (pc && pc.remoteDescription) {
         pc.addIceCandidate(iceCandidate).catch(() => {});
       } else {
-        // PC doesn't exist yet or remote description not set — buffer it
-        if (!iceBuf.has(fromSocketId)) iceBuf.set(fromSocketId, []);
-        iceBuf.get(fromSocketId).push(iceCandidate);
+        if (!iceBuf.has(bufKey)) iceBuf.set(bufKey, []);
+        iceBuf.get(bufKey).push(iceCandidate);
       }
     });
   }
@@ -347,7 +351,7 @@
     const pc = new RTCPeerConnection(ICE_CONFIG);
     outConns.set(viewerSocketId, pc);
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: viewerSocketId });
+      if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: viewerSocketId, type: 'out' });
     };
     pc.onconnectionstatechange = () => {
       console.log(`[WebRTC] outConn ${viewerSocketId}: ${pc.connectionState}`);
@@ -371,7 +375,7 @@
     }
 
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: sharerSocketId });
+      if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: sharerSocketId, type: 'in' });
     };
     pc.ontrack = ({ streams }) => {
       pendingStream = streams[0];

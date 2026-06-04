@@ -335,8 +335,8 @@ io.on('connection', (socket) => {
   socket.on('webrtc-answer', ({ answer, targetSocketId }) => {
     io.to(targetSocketId).emit('webrtc-answer', { answer, fromSocketId: socket.id });
   });
-  socket.on('webrtc-ice', ({ candidate, targetSocketId }) => {
-    io.to(targetSocketId).emit('webrtc-ice', { candidate, fromSocketId: socket.id });
+  socket.on('webrtc-ice', ({ candidate, targetSocketId, type }) => {
+    io.to(targetSocketId).emit('webrtc-ice', { candidate, fromSocketId: socket.id, type });
   });
 
   socket.on('screen-share-start', () => {
