@@ -67,7 +67,7 @@ async function initDb() {
       UNIQUE(session_id, user_id)
     );
     CREATE TABLE IF NOT EXISTS session_flags (
-      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      session_id INTEGER NOT NULL,
       user_id    INTEGER NOT NULL REFERENCES users(id),
       flagged_at TIMESTAMP DEFAULT NOW(),
       PRIMARY KEY (session_id, user_id)
@@ -283,7 +283,6 @@ app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => 
   await pool.query('DELETE FROM participants   WHERE session_id=$1', [session.id]);
   await pool.query('DELETE FROM messages       WHERE session_id=$1', [session.id]);
   await pool.query('DELETE FROM invites        WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM session_flags  WHERE session_id=$1', [session.id]);
   await pool.query('DELETE FROM session_bans   WHERE session_id=$1', [session.id]);
   await pool.query('DELETE FROM sessions       WHERE id=$1',         [session.id]);
   res.json({ success: true });
