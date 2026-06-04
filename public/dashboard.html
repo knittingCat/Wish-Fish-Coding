@@ -165,7 +165,7 @@
 
     if (!list.length) {
       grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">🐠</div>
+        <div class="empty-icon"></div>
         <h3>No sessions yet</h3>
         <p>Create a new session or join one with a code.</p>
       </div>`;
@@ -174,13 +174,13 @@
 
     grid.innerHTML = list.map(s => {
       const badge = s.is_scheduled
-        ? `<span class="badge badge-sched">📅 Scheduled</span>`
+        ? `<span class="badge badge-sched">Scheduled</span>`
         : s.is_active
           ? `<span class="badge badge-live">● Live</span>`
           : `<span class="badge badge-ended">Ended</span>`;
       const schedTime = s.is_scheduled && s.scheduled_time
-        ? `<span class="sess-time">📅 ${fmtDateTime(s.scheduled_time)}</span>` : '';
-      const createdTime = `<span class="sess-time">🕐 Created ${fmtDateTime(s.created_at)}</span>`;
+        ? `<span class="sess-time">Scheduled: ${fmtDateTime(s.scheduled_time)}</span>` : '';
+      const createdTime = `<span class="sess-time">Created: ${fmtDateTime(s.created_at)}</span>`;
       return `
         <div class="sess-card" onclick="openSession('${s.code}')">
           <div class="sess-code">${s.code}</div>
@@ -191,13 +191,13 @@
             ${createdTime}
           </div>
           <div class="sess-meta">
-            <span style="color:var(--txt3);font-size:0.78rem">👥 ${s.participant_count} joined · 📧 ${s.invite_count} invited</span>
+            <span style="color:var(--txt3);font-size:0.78rem">${s.participant_count} joined · ${s.invite_count} invited</span>
           </div>
           <div class="sess-card-actions" onclick="event.stopPropagation()">
             <button class="btn btn-secondary btn-sm" onclick="openInvite('${s.code}')">Invite</button>
             ${s.is_active
               ? `<button class="btn btn-danger btn-sm" onclick="openDelete('${s.code}')">End</button>`
-              : `<button class="btn btn-danger btn-sm" onclick="openPermDelete('${s.code}')">🗑 Delete</button>`}
+              : `<button class="btn btn-danger btn-sm" onclick="openPermDelete('${s.code}')">Delete</button>`}
           </div>
         </div>`;
     }).join('');

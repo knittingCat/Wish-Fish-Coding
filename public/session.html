@@ -33,7 +33,7 @@
           <span class="rec-dot"></span> SHARING
         </div>
         <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
-          🖥 Share Screen
+          Share Screen
         </button>
         <button class="btn btn-ghost btn-sm" onclick="openInviteModal()">Invite</button>
         <button class="btn btn-danger btn-sm" id="endBtn" style="display:none" onclick="endSession()">End Session</button>
@@ -43,7 +43,7 @@
     <!-- Screen share area -->
     <div class="screen-area">
       <div class="screen-placeholder" id="screenPlaceholder">
-        <div class="screen-icon">🖥️</div>
+        <div class="screen-icon"></div>
         <h3>No screen being shared</h3>
         <p>Click "Share Screen" to start sharing,<br>or wait for another participant.</p>
       </div>
@@ -360,7 +360,7 @@
       localStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
     } catch (err) {
       btn.disabled = false;
-      btn.innerHTML = '🖥 Share Screen';
+      btn.innerHTML = 'Share Screen';
       btn.className = 'btn btn-secondary btn-sm';
       if (err.name === 'NotAllowedError') {
         toast('Screen sharing blocked. On macOS: System Settings → Privacy → Screen Recording → enable Chrome, then restart Chrome.', 'err');
@@ -374,7 +374,7 @@
 
     isSharing = true;
     btn.disabled = false;
-    btn.innerHTML = '⏹ Stop Sharing';
+    btn.innerHTML = 'Stop Sharing';
     btn.className = 'btn btn-danger btn-sm';
     document.getElementById('sharingIndicator').style.display = 'flex';
 
