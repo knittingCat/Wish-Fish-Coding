@@ -79,6 +79,7 @@ async function initDb() {
       PRIMARY KEY (session_id, user_id)
     );
   `);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_flagged BOOLEAN DEFAULT FALSE`);
   console.log('Database ready');
 }
 
@@ -326,12 +327,9 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Load persistent flag status from DB
-    const flagRow = await pool.query(
-      'SELECT 1 FROM session_flags WHERE session_id=$1 AND user_id=$2',
-      [session.id, socket.user.id]
-    );
-    const isFlagged = flagRow.rows.length > 0;
+    // Load flag status from user profile
+    const flagRow = await pool.query('SELECT is_flagged FROM users WHERE id=$1', [socket.user.id]);
+    const isFlagged = flagRow.rows[0]?.is_flagged || false;
 
     socket.join(room);
     socket.sessionCode = room;
@@ -431,10 +429,7 @@ io.on('connection', (socket) => {
     const state = roomState.get(socket.sessionCode);
     const target = state?.participants.get(targetSocketId);
     if (!target || target.flagged) return;
-    await pool.query(
-      'INSERT INTO session_flags (session_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [socket.sessionDbId, target.userId]
-    );
+    await pool.query('UPDATE users SET is_flagged=true WHERE id=$1', [target.userId]);
     target.flagged = true;
     io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
   });
