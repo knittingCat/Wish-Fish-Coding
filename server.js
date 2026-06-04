@@ -400,8 +400,8 @@ io.on('connection', (socket) => {
     if (!await verifyHost(socket)) return;
     const state = roomState.get(socket.sessionCode);
     const target = state?.participants.get(targetSocketId);
-    if (!target) return;
-    target.flagged = !target.flagged;
+    if (!target || target.flagged) return; // unflagging requires admin action
+    target.flagged = true;
     io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
   });
 

@@ -552,8 +552,8 @@
         <div class="p-menu-wrap">
           <button class="p-menu-btn" onclick="togglePMenu(event,'${p.socketId}')">···</button>
           <div class="p-menu-dropdown" id="pmenu-${p.socketId}">
-            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}','${esc(p.username)}')">Suspend ${esc(p.username)}'s Activities</button>
-            <button class="p-menu-item" onclick="hostFlag('${p.socketId}','${esc(p.username)}')">Flag ${esc(p.username)}</button>
+            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
+            ${!p.flagged ? `<button class="p-menu-item" onclick="hostFlag('${p.socketId}')">Flag ${esc(p.username)}</button>` : ''}
             <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>
           </div>
         </div>` : '';
