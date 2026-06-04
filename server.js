@@ -66,6 +66,18 @@ async function initDb() {
       joined_at TIMESTAMP DEFAULT NOW(),
       UNIQUE(session_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS session_flags (
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      flagged_at TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (session_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS session_bans (
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      banned_at  TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (session_id, user_id)
+    );
   `);
   console.log('Database ready');
 }
@@ -268,10 +280,12 @@ app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => 
   const session = result.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found or not yours' });
   // Cascade delete child rows before removing the session
-  await pool.query('DELETE FROM participants WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM messages WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM invites WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM sessions WHERE id=$1', [session.id]);
+  await pool.query('DELETE FROM participants   WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM messages       WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM invites        WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM session_flags  WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM session_bans   WHERE session_id=$1', [session.id]);
+  await pool.query('DELETE FROM sessions       WHERE id=$1',         [session.id]);
   res.json({ success: true });
 });
 
@@ -296,20 +310,37 @@ io.on('connection', (socket) => {
     const session = result.rows[0];
     if (!session) { socket.emit('error', { message: 'Session not found' }); return; }
 
-    socket.join(room);
-    socket.sessionCode = room;
-    socket.sessionDbId = session.id;
+    // Check ban before anything else
+    const banRow = await pool.query(
+      'SELECT 1 FROM session_bans WHERE session_id=$1 AND user_id=$2',
+      [session.id, socket.user.id]
+    );
+    if (banRow.rows.length) {
+      socket.emit('join-rejected', { message: 'You have been removed from this session and cannot rejoin.' });
+      return;
+    }
 
-    // Reject non-hosts if room is locked
+    // Check lock
     const existingState = roomState.get(room);
     if (existingState?.isLocked && session.host_id !== socket.user.id) {
       socket.emit('join-rejected', { message: 'This session is locked by the host.' });
       return;
     }
 
+    // Load persistent flag status from DB
+    const flagRow = await pool.query(
+      'SELECT 1 FROM session_flags WHERE session_id=$1 AND user_id=$2',
+      [session.id, socket.user.id]
+    );
+    const isFlagged = flagRow.rows.length > 0;
+
+    socket.join(room);
+    socket.sessionCode = room;
+    socket.sessionDbId = session.id;
+
     if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false });
     const state = roomState.get(room);
-    state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id, suspended: false, flagged: false });
+    state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id, suspended: false, flagged: isFlagged });
 
     await pool.query(
       'INSERT INTO participants (session_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
@@ -400,13 +431,25 @@ io.on('connection', (socket) => {
     if (!await verifyHost(socket)) return;
     const state = roomState.get(socket.sessionCode);
     const target = state?.participants.get(targetSocketId);
-    if (!target || target.flagged) return; // unflagging requires admin action
+    if (!target || target.flagged) return;
+    await pool.query(
+      'INSERT INTO session_flags (session_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [socket.sessionDbId, target.userId]
+    );
     target.flagged = true;
     io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
   });
 
   socket.on('host-remove', async ({ targetSocketId }) => {
     if (!await verifyHost(socket)) return;
+    const state = roomState.get(socket.sessionCode);
+    const target = state?.participants.get(targetSocketId);
+    if (target) {
+      await pool.query(
+        'INSERT INTO session_bans (session_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [socket.sessionDbId, target.userId]
+      );
+    }
     io.to(targetSocketId).emit('you-were-removed');
   });
 
