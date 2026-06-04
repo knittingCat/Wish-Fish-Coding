@@ -300,7 +300,14 @@ io.on('connection', (socket) => {
     socket.sessionCode = room;
     socket.sessionDbId = session.id;
 
-    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set() });
+    // Reject non-hosts if room is locked
+    const existingState = roomState.get(room);
+    if (existingState?.isLocked && session.host_id !== socket.user.id) {
+      socket.emit('join-rejected', { message: 'This session is locked by the host.' });
+      return;
+    }
+
+    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false });
     const state = roomState.get(room);
     state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id });
 
@@ -310,7 +317,7 @@ io.on('connection', (socket) => {
     );
 
     const peers = [...state.participants.values()].filter(p => p.socketId !== socket.id);
-    socket.emit('room-state', { peers, sharerIds: [...state.sharerIds] });
+    socket.emit('room-state', { peers, sharerIds: [...state.sharerIds], isLocked: state.isLocked });
     io.to(room).emit('participants-update', [...state.participants.values()]);
     socket.to(room).emit('user-joined', { socketId: socket.id, username: socket.user.username });
   });
@@ -355,6 +362,16 @@ io.on('connection', (socket) => {
 
   socket.on('request-stream', ({ sharerSocketId }) => {
     io.to(sharerSocketId).emit('viewer-wants-stream', { viewerSocketId: socket.id });
+  });
+
+  socket.on('toggle-lock', async () => {
+    if (!socket.sessionCode) return;
+    const result = await pool.query('SELECT host_id FROM sessions WHERE code=$1', [socket.sessionCode]);
+    if (!result.rows[0] || result.rows[0].host_id !== socket.user.id) return;
+    const state = roomState.get(socket.sessionCode);
+    if (!state) return;
+    state.isLocked = !state.isLocked;
+    io.to(socket.sessionCode).emit('lock-state', { isLocked: state.isLocked });
   });
 
   socket.on('disconnect', () => {

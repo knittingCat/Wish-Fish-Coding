@@ -32,10 +32,12 @@
         <div class="sharing-indicator" id="sharingIndicator">
           <span class="rec-dot"></span> SHARING
         </div>
+        <div class="locked-indicator" id="lockedIndicator">LOCKED</div>
         <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
           Share Screen
         </button>
         <button class="btn btn-ghost btn-sm" onclick="openInviteModal()">Invite</button>
+        <button class="btn btn-secondary btn-sm" id="lockBtn" style="display:none" onclick="toggleLock()">Lock</button>
         <button class="btn btn-danger btn-sm" id="endBtn" style="display:none" onclick="endSession()">End Session</button>
       </div>
     </div>
@@ -138,6 +140,19 @@
   let sessionData = null;
   let isHost = false;
   let socket = null;
+  let isLocked = false;
+
+  function updateLockUI() {
+    document.getElementById('lockedIndicator').style.display = isLocked ? 'flex' : 'none';
+    if (!isHost) return;
+    const btn = document.getElementById('lockBtn');
+    btn.textContent = isLocked ? 'Unlock' : 'Lock';
+    btn.className = isLocked ? 'btn btn-danger btn-sm' : 'btn btn-secondary btn-sm';
+  }
+
+  function toggleLock() {
+    if (socket) socket.emit('toggle-lock');
+  }
 
   // WebRTC state
   let localStream = null;       // screen share stream (when we're the sharer)
@@ -212,6 +227,7 @@
       document.title = `${CODE} — Wish Fish Coding`;
       isHost = sessionData.host_username === ME;
       document.getElementById('endBtn').style.display = isHost ? '' : 'none';
+      document.getElementById('lockBtn').style.display = isHost ? '' : 'none';
 
       // Load chat history
       for (const msg of sessionData.messages) {
@@ -236,11 +252,13 @@
       toast(`Connection error: ${err.message}`, 'err');
     });
 
-    socket.on('room-state', ({ peers, sharerIds }) => {
+    socket.on('room-state', ({ peers, sharerIds, isLocked: locked }) => {
       renderParticipants(peers.concat([{ socketId: socket.id, username: ME }]));
       for (const sid of sharerIds || []) {
         if (sid !== socket.id) socket.emit('request-stream', { sharerSocketId: sid });
       }
+      isLocked = locked || false;
+      updateLockUI();
     });
 
     socket.on('participants-update', users => {
@@ -262,6 +280,17 @@
     socket.on('session-ended', () => {
       toast('Session ended by host', 'err');
       setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
+    });
+
+    socket.on('lock-state', ({ isLocked: locked }) => {
+      isLocked = locked;
+      updateLockUI();
+      appendSystemMsg(locked ? 'Session locked by host' : 'Session unlocked by host');
+    });
+
+    socket.on('join-rejected', ({ message }) => {
+      toast(message, 'err');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
     });
 
     socket.on('error', ({ message }) => {
