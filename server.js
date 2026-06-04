@@ -335,7 +335,7 @@ io.on('connection', (socket) => {
     socket.sessionCode = room;
     socket.sessionDbId = session.id;
 
-    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false });
+    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false, audioParticipants: new Map() });
     const state = roomState.get(room);
     state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id, suspended: false, flagged: isFlagged });
 
@@ -374,6 +374,17 @@ io.on('connection', (socket) => {
   });
   socket.on('webrtc-ice', ({ candidate, targetSocketId, type }) => {
     io.to(targetSocketId).emit('webrtc-ice', { candidate, fromSocketId: socket.id, type });
+  });
+
+  // ── Audio signaling relay ────────────────────────────────────────────────
+  socket.on('audio-offer', ({ offer, targetSocketId }) => {
+    io.to(targetSocketId).emit('audio-offer', { offer, fromSocketId: socket.id, username: socket.user.username });
+  });
+  socket.on('audio-answer', ({ answer, targetSocketId }) => {
+    io.to(targetSocketId).emit('audio-answer', { answer, fromSocketId: socket.id });
+  });
+  socket.on('audio-ice', ({ candidate, targetSocketId }) => {
+    io.to(targetSocketId).emit('audio-ice', { candidate, fromSocketId: socket.id });
   });
 
   socket.on('screen-share-start', () => {
@@ -456,6 +467,34 @@ io.on('connection', (socket) => {
     io.to(targetSocketId).emit('you-were-removed');
   });
 
+  // ── Audio channel membership ─────────────────────────────────────────────
+  socket.on('audio-join', () => {
+    if (!socket.sessionCode) return;
+    const state = roomState.get(socket.sessionCode);
+    if (!state || !state.participants.has(socket.id)) return;
+    state.audioParticipants.set(socket.id, { socketId: socket.id, username: socket.user.username, muted: false });
+    const peers = [...state.audioParticipants.values()].filter(p => p.socketId !== socket.id);
+    socket.emit('audio-peers', { peers });
+    socket.to(socket.sessionCode).emit('audio-user-joined', { socketId: socket.id, username: socket.user.username, muted: false });
+  });
+
+  socket.on('audio-leave', () => {
+    if (!socket.sessionCode) return;
+    const state = roomState.get(socket.sessionCode);
+    if (!state) return;
+    state.audioParticipants.delete(socket.id);
+    socket.to(socket.sessionCode).emit('audio-user-left', { socketId: socket.id });
+  });
+
+  socket.on('audio-mute', ({ muted }) => {
+    if (!socket.sessionCode) return;
+    const state = roomState.get(socket.sessionCode);
+    const entry = state?.audioParticipants.get(socket.id);
+    if (!entry) return;
+    entry.muted = !!muted;
+    io.to(socket.sessionCode).emit('audio-user-muted', { socketId: socket.id, muted: entry.muted });
+  });
+
   socket.on('disconnect', () => {
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
@@ -464,6 +503,10 @@ io.on('connection', (socket) => {
     if (state.sharerIds.has(socket.id)) {
       state.sharerIds.delete(socket.id);
       io.to(socket.sessionCode).emit('screen-share-stopped', { socketId: socket.id });
+    }
+    if (state.audioParticipants?.has(socket.id)) {
+      state.audioParticipants.delete(socket.id);
+      io.to(socket.sessionCode).emit('audio-user-left', { socketId: socket.id });
     }
     if (state.participants.size === 0) roomState.delete(socket.sessionCode);
     else io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);

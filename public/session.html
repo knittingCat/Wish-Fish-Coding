@@ -43,6 +43,7 @@
           <span class="rec-dot"></span> SHARING
         </div>
         <div class="locked-indicator" id="lockedIndicator">LOCKED</div>
+        <button class="btn btn-mute btn-sm" id="muteBtn" style="display:none" onclick="toggleMute()">🎤 Mute</button>
         <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
           Share Screen
         </button>
@@ -69,6 +70,7 @@
       <button class="sidebar-tab active" onclick="sideTab('chat', this)">Chat</button>
       <button class="sidebar-tab" onclick="sideTab('people', this)">People</button>
       <button class="sidebar-tab" onclick="sideTab('invite', this)">Invite</button>
+      <button class="sidebar-tab" onclick="sideTab('audio', this)">Audio</button>
     </div>
 
     <!-- Chat panel -->
@@ -83,6 +85,23 @@
     <!-- People panel -->
     <div class="sidebar-panel" id="panel-people">
       <div class="participants-panel" id="participantsList"></div>
+    </div>
+
+    <!-- Audio panel -->
+    <div class="sidebar-panel" id="panel-audio">
+      <div class="audio-panel">
+        <div class="audio-join-area" id="audioJoinArea">
+          <div class="audio-join-icon">🎤</div>
+          <p>Join the audio channel to speak and listen with other participants.</p>
+          <button class="btn btn-primary btn-sm" onclick="joinAudio()">Join Audio</button>
+        </div>
+        <div class="audio-active-area" id="audioActiveArea" style="display:none">
+          <div class="audio-participants-list" id="audioParticipantsList"></div>
+          <div class="audio-leave-bar">
+            <button class="btn btn-danger btn-full btn-sm" onclick="leaveAudio()">Leave Audio</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Invite panel -->
@@ -165,12 +184,21 @@
     if (socket) socket.emit('toggle-lock');
   }
 
-  // WebRTC state
+  // WebRTC state — screen sharing
   let localStream = null;       // screen share stream (when we're the sharer)
   let isSharing = false;
   const peerConns = new Map();  // socketId -> RTCPeerConnection (as viewer, receiving)
   const outConns  = new Map();  // socketId -> RTCPeerConnection (as sharer, sending to viewer)
   const iceBuf    = new Map();  // socketId -> [RTCIceCandidate] buffered before remoteDescription is set
+
+  // Audio state
+  let audioStream = null;
+  let isInAudio   = false;
+  let isMuted     = false;
+  let isSuspended = false;
+  const audioConns    = new Map();  // socketId -> RTCPeerConnection (audio)
+  const audioIceBuf   = new Map();  // socketId -> [RTCIceCandidate]
+  const audioPeers    = new Map();  // socketId -> {socketId, username, muted}
 
   // ── Video tile helpers ─────────────────────────────────────────────────────
   function addVideoTile(id, username, stream) {
@@ -228,6 +256,125 @@
     for (const c of buf) {
       try { await pc.addIceCandidate(c); } catch {}
     }
+  }
+
+  // ── Audio helpers ──────────────────────────────────────────────────────────
+  function createAudioConn(remoteSocketId) {
+    if (audioConns.has(remoteSocketId)) audioConns.get(remoteSocketId).close();
+    const pc = new RTCPeerConnection(ICE_CONFIG);
+    audioConns.set(remoteSocketId, pc);
+    if (audioStream) audioStream.getAudioTracks().forEach(t => pc.addTrack(t, audioStream));
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) socket.emit('audio-ice', { candidate, targetSocketId: remoteSocketId });
+    };
+    pc.ontrack = ({ streams }) => {
+      let el = document.getElementById(`audio-${remoteSocketId}`);
+      if (!el) {
+        el = document.createElement('audio');
+        el.id = `audio-${remoteSocketId}`;
+        el.autoplay = true;
+        document.body.appendChild(el);
+      }
+      el.srcObject = streams[0];
+      el.play().catch(() => {});
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') { pc.close(); audioConns.delete(remoteSocketId); }
+    };
+    return pc;
+  }
+
+  async function drainAudioBuf(pc, socketId) {
+    const buf = audioIceBuf.get(socketId) || [];
+    audioIceBuf.delete(socketId);
+    for (const c of buf) { try { await pc.addIceCandidate(c); } catch {} }
+  }
+
+  async function joinAudio() {
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      if (err.name === 'NotAllowedError') toast('Microphone access denied.', 'err');
+      else toast('Could not access microphone: ' + err.message, 'err');
+      return;
+    }
+    isInAudio = true;
+    isMuted = false;
+    if (isSuspended) {
+      isMuted = true;
+      audioStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    }
+    updateAudioUI();
+    socket.emit('audio-join');
+  }
+
+  function leaveAudio() {
+    if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); audioStream = null; }
+    audioConns.forEach((pc, sid) => {
+      pc.close();
+      const el = document.getElementById(`audio-${sid}`);
+      if (el) el.remove();
+    });
+    audioConns.clear();
+    audioIceBuf.clear();
+    audioPeers.clear();
+    isInAudio = false;
+    isMuted = false;
+    socket.emit('audio-leave');
+    updateAudioUI();
+  }
+
+  function toggleMute() {
+    if (!isInAudio || isSuspended) return;
+    isMuted = !isMuted;
+    if (audioStream) audioStream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+    socket.emit('audio-mute', { muted: isMuted });
+    const self = audioPeers.get(socket?.id);
+    if (self) { self.muted = isMuted; renderAudioPeers(); }
+    updateMuteBtn();
+  }
+
+  function updateMuteBtn() {
+    const btn = document.getElementById('muteBtn');
+    if (!btn) return;
+    if (isMuted) { btn.textContent = '🔇 Unmute'; btn.className = 'btn btn-mute btn-sm muted'; }
+    else         { btn.textContent = '🎤 Mute';   btn.className = 'btn btn-mute btn-sm'; }
+  }
+
+  function updateAudioUI() {
+    const joinArea   = document.getElementById('audioJoinArea');
+    const activeArea = document.getElementById('audioActiveArea');
+    const muteBtn    = document.getElementById('muteBtn');
+    if (isInAudio) {
+      joinArea.style.display   = 'none';
+      activeArea.style.display = '';
+      if (!isSuspended) muteBtn.style.display = '';
+    } else {
+      joinArea.style.display   = '';
+      activeArea.style.display = 'none';
+      muteBtn.style.display    = 'none';
+    }
+    updateMuteBtn();
+  }
+
+  function renderAudioPeers() {
+    const el = document.getElementById('audioParticipantsList');
+    if (!el) return;
+    const list = [...audioPeers.values()];
+    if (!list.length) {
+      el.innerHTML = '<p style="color:var(--txt3);font-size:0.82rem;text-align:center;padding:16px">No one in audio yet</p>';
+      return;
+    }
+    el.innerHTML = list.map(p => {
+      const isMe   = p.socketId === socket?.id;
+      const icon   = p.muted ? '🔇' : '🎤';
+      const mutedTag = p.muted ? '<span class="audio-muted-tag">MUTED</span>' : '';
+      return `<div class="audio-participant${p.muted ? ' muted' : ''}">
+        <span class="audio-mic-icon">${icon}</span>
+        <span class="audio-participant-name">${esc(p.username)}${isMe ? ' (you)' : ''}</span>
+        ${mutedTag}
+      </div>`;
+    }).join('');
   }
 
   // ── Load session data ──────────────────────────────────────────────────────
@@ -323,15 +470,25 @@
     });
 
     socket.on('you-are-suspended', () => {
+      isSuspended = true;
       toast('Your activities have been suspended by the host.', 'err');
       document.querySelector('.chat-input-row').style.display = 'none';
       document.getElementById('shareBtn').style.display = 'none';
+      document.getElementById('muteBtn').style.display = 'none';
+      if (isInAudio && !isMuted) {
+        isMuted = true;
+        if (audioStream) audioStream.getAudioTracks().forEach(t => { t.enabled = false; });
+        socket.emit('audio-mute', { muted: true });
+        updateMuteBtn();
+      }
     });
 
     socket.on('you-are-unsuspended', () => {
+      isSuspended = false;
       toast('Your activities have been resumed by the host.', 'ok');
       document.querySelector('.chat-input-row').style.display = '';
       document.getElementById('shareBtn').style.display = '';
+      if (isInAudio) document.getElementById('muteBtn').style.display = '';
     });
 
     socket.on('error', ({ message }) => {
@@ -411,6 +568,76 @@
       } else {
         if (!iceBuf.has(bufKey)) iceBuf.set(bufKey, []);
         iceBuf.get(bufKey).push(iceCandidate);
+      }
+    });
+
+    // ── Audio signals ────────────────────────────────────────────────────────
+
+    // We just joined — server sends existing audio participants, we offer to each
+    socket.on('audio-peers', async ({ peers }) => {
+      audioPeers.set(socket.id, { socketId: socket.id, username: ME, muted: isMuted });
+      for (const peer of peers) {
+        audioPeers.set(peer.socketId, peer);
+        try {
+          const pc = createAudioConn(peer.socketId);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('audio-offer', { offer: pc.localDescription, targetSocketId: peer.socketId });
+        } catch (err) { console.error('[Audio] offer error:', err); }
+      }
+      renderAudioPeers();
+    });
+
+    socket.on('audio-user-joined', ({ socketId, username, muted }) => {
+      audioPeers.set(socketId, { socketId, username, muted });
+      renderAudioPeers();
+    });
+
+    socket.on('audio-user-left', ({ socketId }) => {
+      audioPeers.delete(socketId);
+      if (audioConns.has(socketId)) { audioConns.get(socketId).close(); audioConns.delete(socketId); }
+      const el = document.getElementById(`audio-${socketId}`);
+      if (el) el.remove();
+      renderAudioPeers();
+    });
+
+    socket.on('audio-user-muted', ({ socketId, muted }) => {
+      const entry = audioPeers.get(socketId);
+      if (entry) { entry.muted = muted; renderAudioPeers(); }
+    });
+
+    // Existing participant receives offer from new joiner
+    socket.on('audio-offer', async ({ offer, fromSocketId }) => {
+      if (!isInAudio) return;
+      try {
+        const pc = createAudioConn(fromSocketId);
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await drainAudioBuf(pc, fromSocketId);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('audio-answer', { answer: pc.localDescription, targetSocketId: fromSocketId });
+      } catch (err) { console.error('[Audio] answer error:', err); }
+    });
+
+    // New joiner receives answer from existing participant
+    socket.on('audio-answer', async ({ answer, fromSocketId }) => {
+      const pc = audioConns.get(fromSocketId);
+      if (!pc) return;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await drainAudioBuf(pc, fromSocketId);
+      } catch (err) { console.error('[Audio] setRemoteDescription error:', err); }
+    });
+
+    socket.on('audio-ice', ({ candidate, fromSocketId }) => {
+      if (!candidate) return;
+      const pc = audioConns.get(fromSocketId);
+      const ice = new RTCIceCandidate(candidate);
+      if (pc && pc.remoteDescription) {
+        pc.addIceCandidate(ice).catch(() => {});
+      } else {
+        if (!audioIceBuf.has(fromSocketId)) audioIceBuf.set(fromSocketId, []);
+        audioIceBuf.get(fromSocketId).push(ice);
       }
     });
   }
