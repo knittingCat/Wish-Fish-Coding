@@ -300,10 +300,12 @@
 
     socket.on('you-are-suspended', () => {
       toast('Your activities have been suspended by the host.', 'err');
+      document.querySelector('.chat-input-row').style.display = 'none';
     });
 
     socket.on('you-are-unsuspended', () => {
       toast('Your activities have been resumed by the host.', 'ok');
+      document.querySelector('.chat-input-row').style.display = '';
     });
 
     socket.on('error', ({ message }) => {
