@@ -47,7 +47,7 @@
         <h3>No screen being shared</h3>
         <p>Click "Share Screen" to start sharing,<br>or wait for another participant.</p>
       </div>
-      <video id="screenVideo" autoplay playsinline muted></video>
+      <div class="screens-grid" id="screensGrid"></div>
     </div>
   </div>
 
@@ -146,6 +146,45 @@
   const outConns  = new Map();  // socketId -> RTCPeerConnection (as sharer, sending to viewer)
   const iceBuf    = new Map();  // socketId -> [RTCIceCandidate] buffered before remoteDescription is set
 
+  // ── Video tile helpers ─────────────────────────────────────────────────────
+  function addVideoTile(id, username, stream) {
+    removeVideoTile(id);
+    const tile = document.createElement('div');
+    tile.className = 'video-tile';
+    tile.id = `tile-${id}`;
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.srcObject = stream;
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = id === 'local' ? `${username} (you)` : username;
+    tile.appendChild(video);
+    tile.appendChild(label);
+    document.getElementById('screensGrid').appendChild(tile);
+    updateScreenArea();
+    video.play().catch(() => {});
+  }
+
+  function removeVideoTile(id) {
+    const el = document.getElementById(`tile-${id}`);
+    if (el) el.remove();
+    updateScreenArea();
+  }
+
+  function updateScreenArea() {
+    const grid = document.getElementById('screensGrid');
+    const count = grid.querySelectorAll('.video-tile').length;
+    document.getElementById('screenPlaceholder').style.display = count ? 'none' : '';
+    grid.style.display = count ? 'grid' : 'none';
+    if (!count) return;
+    const cols = count === 1 ? 1 : count <= 4 ? 2 : 3;
+    const rows = Math.ceil(count / cols);
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  }
+
   const ICE_CONFIG = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -194,11 +233,10 @@
       toast(`Connection error: ${err.message}`, 'err');
     });
 
-    socket.on('room-state', ({ peers, sharerId }) => {
+    socket.on('room-state', ({ peers, sharerIds }) => {
       renderParticipants(peers.concat([{ socketId: socket.id, username: ME }]));
-      // If someone is already sharing, request their stream
-      if (sharerId && sharerId !== socket.id) {
-        socket.emit('request-stream', { sharerSocketId: sharerId });
+      for (const sid of sharerIds || []) {
+        if (sid !== socket.id) socket.emit('request-stream', { sharerSocketId: sid });
       }
     });
 
@@ -238,15 +276,11 @@
 
     socket.on('screen-share-stopped', ({ socketId }) => {
       appendSystemMsg('Screen sharing stopped');
-      // Clean up receiver peer conn
       if (peerConns.has(socketId)) {
         peerConns.get(socketId).close();
         peerConns.delete(socketId);
       }
-      const video = document.getElementById('screenVideo');
-      video.srcObject = null;
-      video.style.display = 'none';
-      document.getElementById('screenPlaceholder').style.display = '';
+      removeVideoTile(socketId);
     });
 
     // Sharer: a new viewer wants our stream
@@ -265,9 +299,9 @@
     });
 
     // Viewer: receive offer from sharer
-    socket.on('webrtc-offer', async ({ offer, fromSocketId }) => {
+    socket.on('webrtc-offer', async ({ offer, fromSocketId, username }) => {
       try {
-        const pc = createInConn(fromSocketId);
+        const pc = createInConn(fromSocketId, username);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         await drainIceBuf(pc, fromSocketId); // apply any candidates that arrived early
         const answer = await pc.createAnswer();
@@ -320,7 +354,7 @@
     return pc;
   }
 
-  function createInConn(sharerSocketId) {
+  function createInConn(sharerSocketId, sharerUsername) {
     if (peerConns.has(sharerSocketId)) peerConns.get(sharerSocketId).close();
     const pc = new RTCPeerConnection(ICE_CONFIG);
     peerConns.set(sharerSocketId, pc);
@@ -328,16 +362,13 @@
       if (candidate) socket.emit('webrtc-ice', { candidate, targetSocketId: sharerSocketId });
     };
     pc.ontrack = ({ streams }) => {
-      console.log('[WebRTC] received remote track');
-      const video = document.getElementById('screenVideo');
-      video.srcObject = streams[0];
-      video.style.display = 'block';
-      document.getElementById('screenPlaceholder').style.display = 'none';
-      video.play().catch(() => {});
+      addVideoTile(sharerSocketId, sharerUsername || sharerSocketId, streams[0]);
     };
     pc.onconnectionstatechange = () => {
-      console.log(`[WebRTC] inConn ${sharerSocketId}: ${pc.connectionState}`);
-      if (pc.connectionState === 'failed') toast('Screen share connection failed', 'err');
+      if (pc.connectionState === 'failed') {
+        toast('Screen share connection failed', 'err');
+        removeVideoTile(sharerSocketId);
+      }
     };
     return pc;
   }
@@ -379,12 +410,8 @@
     btn.className = 'btn btn-danger btn-sm';
     document.getElementById('sharingIndicator').style.display = 'flex';
 
-    // Show own screen locally immediately
-    const video = document.getElementById('screenVideo');
-    video.srcObject = localStream;
-    video.style.display = 'block';
-    document.getElementById('screenPlaceholder').style.display = 'none';
-    video.play().catch(() => {});
+    // Show own screen locally as a tile
+    addVideoTile('local', ME, localStream);
 
     socket.emit('screen-share-start');
 
@@ -406,11 +433,7 @@
     btn.className = 'btn btn-secondary btn-sm';
     btn.disabled = false;
     document.getElementById('sharingIndicator').style.display = 'none';
-
-    const video = document.getElementById('screenVideo');
-    video.srcObject = null;
-    video.style.display = 'none';
-    document.getElementById('screenPlaceholder').style.display = '';
+    removeVideoTile('local');
 
     socket.emit('screen-share-stop');
   }

@@ -300,7 +300,7 @@ io.on('connection', (socket) => {
     socket.sessionCode = room;
     socket.sessionDbId = session.id;
 
-    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerId: null });
+    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set() });
     const state = roomState.get(room);
     state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id });
 
@@ -310,7 +310,7 @@ io.on('connection', (socket) => {
     );
 
     const peers = [...state.participants.values()].filter(p => p.socketId !== socket.id);
-    socket.emit('room-state', { peers, sharerId: state.sharerId });
+    socket.emit('room-state', { peers, sharerIds: [...state.sharerIds] });
     io.to(room).emit('participants-update', [...state.participants.values()]);
     socket.to(room).emit('user-joined', { socketId: socket.id, username: socket.user.username });
   });
@@ -342,14 +342,14 @@ io.on('connection', (socket) => {
   socket.on('screen-share-start', () => {
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
-    if (state) state.sharerId = socket.id;
+    if (state) state.sharerIds.add(socket.id);
     socket.to(socket.sessionCode).emit('screen-share-started', { socketId: socket.id, username: socket.user.username });
   });
 
   socket.on('screen-share-stop', () => {
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
-    if (state) state.sharerId = null;
+    if (state) state.sharerIds.delete(socket.id);
     socket.to(socket.sessionCode).emit('screen-share-stopped', { socketId: socket.id });
   });
 
@@ -362,8 +362,8 @@ io.on('connection', (socket) => {
     const state = roomState.get(socket.sessionCode);
     if (!state) return;
     state.participants.delete(socket.id);
-    if (state.sharerId === socket.id) {
-      state.sharerId = null;
+    if (state.sharerIds.has(socket.id)) {
+      state.sharerIds.delete(socket.id);
       io.to(socket.sessionCode).emit('screen-share-stopped', { socketId: socket.id });
     }
     if (state.participants.size === 0) roomState.delete(socket.sessionCode);

@@ -285,7 +285,21 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .screen-placeholder .screen-icon { font-size: 4rem; margin-bottom: 14px; opacity: .4; }
 .screen-placeholder h3 { font-size: 1rem; color: var(--txt2); margin-bottom: 6px; }
 .screen-placeholder p { font-size: 0.82rem; }
-#screenVideo { width: 100%; height: 100%; object-fit: contain; display: none; }
+.screens-grid {
+  display: none; width: 100%; height: 100%;
+  gap: 6px; padding: 6px;
+}
+.video-tile {
+  position: relative; background: #000;
+  border-radius: 8px; overflow: hidden; min-height: 0;
+}
+.video-tile video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.video-label {
+  position: absolute; bottom: 8px; left: 8px;
+  background: rgba(0,0,0,.55); color: #fff;
+  font-size: 0.72rem; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; letter-spacing: .03em;
+}
 .sharing-badge {
   position: absolute; top: 14px; left: 14px;
   background: rgba(56,161,105,.15); border: 1px solid rgba(56,161,105,.4); color: var(--ok);
