@@ -337,8 +337,8 @@
   function updateMuteBtn() {
     const btn = document.getElementById('muteBtn');
     if (!btn) return;
-    if (isMuted) { btn.textContent = '🔇 Unmute'; btn.className = 'btn btn-mute btn-sm muted'; }
-    else         { btn.textContent = '🎤 Mute';   btn.className = 'btn btn-mute btn-sm'; }
+    if (isMuted) { btn.textContent = 'Unmute'; btn.className = 'btn btn-mute btn-sm muted'; }
+    else         { btn.textContent = 'Mute';   btn.className = 'btn btn-mute btn-sm'; }
   }
 
   function updateAudioUI() {
