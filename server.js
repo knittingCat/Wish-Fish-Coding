@@ -434,6 +434,15 @@ io.on('connection', (socket) => {
     io.to(socket.sessionCode).emit('participants-update', [...state.participants.values()]);
   });
 
+  socket.on('transfer-host', async ({ targetSocketId }) => {
+    if (!await verifyHost(socket)) return;
+    const state = roomState.get(socket.sessionCode);
+    const target = state?.participants.get(targetSocketId);
+    if (!target) return;
+    await pool.query('UPDATE sessions SET host_id=$1 WHERE code=$2', [target.userId, socket.sessionCode]);
+    io.to(socket.sessionCode).emit('host-transferred', { newHostUsername: target.username, newHostSocketId: targetSocketId });
+  });
+
   socket.on('host-remove', async ({ targetSocketId }) => {
     if (!await verifyHost(socket)) return;
     const state = roomState.get(socket.sessionCode);

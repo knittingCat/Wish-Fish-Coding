@@ -13,7 +13,7 @@
   <a href="/dashboard" class="brand"><span class="fish">🐟</span> <span>Wish Fish Coding</span></a>
   <div class="nav-right">
     <span class="nav-user" id="navUser"></span>
-    <button class="btn btn-ghost btn-sm" onclick="logout()">Leave</button>
+    <button class="btn btn-ghost btn-sm" onclick="leaveSession()">Leave</button>
   </div>
 </nav>
 
@@ -151,6 +151,7 @@
   let isHost = false;
   let socket = null;
   let isLocked = false;
+  let lastParticipants = [];
 
   function updateLockUI() {
     document.getElementById('lockedIndicator').style.display = isLocked ? 'flex' : 'none';
@@ -305,6 +306,15 @@
       document.getElementById('gateTitle').textContent = isLock ? 'Session Locked' : 'Access Denied';
       document.getElementById('gateMsg').textContent = message;
       document.getElementById('gateBtn').style.display = '';
+    });
+
+    socket.on('host-transferred', ({ newHostUsername }) => {
+      sessionData.host_username = newHostUsername;
+      isHost = (newHostUsername === ME);
+      document.getElementById('endBtn').style.display  = isHost ? '' : 'none';
+      document.getElementById('lockBtn').style.display = isHost ? '' : 'none';
+      renderParticipants(lastParticipants);
+      appendSystemMsg(isHost ? 'You are now the host.' : `${newHostUsername} is now the host.`);
     });
 
     socket.on('you-were-removed', () => {
@@ -558,6 +568,7 @@
 
   // ── Participants ───────────────────────────────────────────────────────────
   function renderParticipants(list) {
+    lastParticipants = list;
     const el = document.getElementById('participantsList');
     el.innerHTML = list.map(p => {
       const initial = (p.username || '?')[0].toUpperCase();
@@ -572,6 +583,7 @@
         : '';
       const hostItems = isHost ? `
             <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
+            <button class="p-menu-item" onclick="transferHost('${p.socketId}','${esc(p.username)}')">Make ${esc(p.username)} the Host</button>
             <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>` : '';
       const menuHtml = canAct && (flagItem || hostItems) ? `
         <div class="p-menu-wrap">
@@ -613,6 +625,23 @@
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
     if (!confirm(`Remove ${username} from the session?`)) return;
     socket.emit('host-remove', { targetSocketId: socketId });
+  }
+
+  function transferHost(socketId, username) {
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    if (!confirm(`Make ${username} the host? You will lose host privileges.`)) return;
+    socket.emit('transfer-host', { targetSocketId: socketId });
+  }
+
+  function leaveSession() {
+    if (isHost) {
+      const others = lastParticipants.filter(p => p.socketId !== socket?.id);
+      if (others.length > 0) {
+        toast('You must make someone else the host before leaving. Use the ··· menu next to a participant.', 'err');
+        return;
+      }
+    }
+    logout();
   }
 
   // ── End session (host only) ────────────────────────────────────────────────
