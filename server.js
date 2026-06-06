@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const path = require('path');
 
@@ -82,23 +83,24 @@ async function initDb() {
   console.log('Database ready');
 }
 
-// ── Email (Resend) ────────────────────────────────────────────────────────────
+// ── Email (Brevo SMTP) ────────────────────────────────────────────────────────
+const transporter = process.env.BREVO_USER
+  ? nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: { user: process.env.BREVO_USER, pass: process.env.BREVO_PASS }
+    })
+  : null;
+
 async function sendEmail(to, subject, html) {
-  if (!process.env.RESEND_API_KEY) {
+  if (!transporter) {
     console.log(`[Email SKIPPED] To: ${to} | Subject: ${subject}`);
     return;
   }
   try {
-    const from = process.env.EMAIL_FROM || 'Wish Fish Coding <onboarding@resend.dev>';
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ from, to, subject, html })
-    });
-    if (!res.ok) console.error('[Resend error]', await res.json());
+    const from = `"Wish Fish Coding" <${process.env.BREVO_USER}>`;
+    await transporter.sendMail({ from, to, subject, html });
   } catch (err) {
     console.error('[Email error]', err.message);
   }
