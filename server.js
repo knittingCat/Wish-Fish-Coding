@@ -5,7 +5,6 @@ const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const path = require('path');
 
@@ -83,23 +82,23 @@ async function initDb() {
   console.log('Database ready');
 }
 
-// ── Email ─────────────────────────────────────────────────────────────────────
-const transporter = process.env.SMTP_USER
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-    })
-  : null;
-
+// ── Email (Resend) ────────────────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
-  if (!transporter) {
+  if (!process.env.RESEND_API_KEY) {
     console.log(`[Email SKIPPED] To: ${to} | Subject: ${subject}`);
     return;
   }
   try {
-    await transporter.sendMail({ from: `"Wish Fish Coding" <${process.env.SMTP_USER}>`, to, subject, html });
+    const from = process.env.EMAIL_FROM || 'Wish Fish Coding <onboarding@resend.dev>';
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ from, to, subject, html })
+    });
+    if (!res.ok) console.error('[Resend error]', await res.json());
   } catch (err) {
     console.error('[Email error]', err.message);
   }
