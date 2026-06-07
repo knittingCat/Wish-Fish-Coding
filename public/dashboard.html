@@ -176,8 +176,8 @@
   function renderSessions() {
     const grid = document.getElementById('sessionsGrid');
     let list = allSessions;
-    if (currentTab === 'live')      list = list.filter(s => s.is_active && !s.is_scheduled);
-    if (currentTab === 'scheduled') list = list.filter(s => s.is_scheduled);
+    if (currentTab === 'live')      list = list.filter(s => s.is_active && (!s.is_scheduled || new Date(s.scheduled_time) <= new Date()));
+    if (currentTab === 'scheduled') list = list.filter(s => s.is_scheduled && new Date(s.scheduled_time) > new Date());
 
     document.getElementById('listLabel').textContent =
       currentTab === 'all' ? 'All' : currentTab === 'live' ? 'Live' : 'Scheduled';
@@ -192,12 +192,14 @@
     }
 
     grid.innerHTML = list.map(s => {
-      const badge = s.is_scheduled
+      const schedPast = s.is_scheduled && s.scheduled_time && new Date(s.scheduled_time) <= new Date();
+      const isLive = s.is_active && (!s.is_scheduled || schedPast);
+      const badge = (s.is_scheduled && !schedPast)
         ? `<span class="badge badge-sched">Scheduled</span>`
-        : s.is_active
+        : isLive
           ? `<span class="badge badge-live">● Live</span>`
           : `<span class="badge badge-ended">Ended</span>`;
-      const schedTime = s.is_scheduled && s.scheduled_time
+      const schedTime = s.is_scheduled && s.scheduled_time && !schedPast
         ? `<span class="sess-time">Scheduled: ${fmtDateTime(s.scheduled_time)}</span>` : '';
       const createdTime = `<span class="sess-time">Created: ${fmtDateTime(s.created_at)}</span>`;
       return `
