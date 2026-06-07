@@ -125,25 +125,46 @@ async function sendEmail(to, subject, html) {
 function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, timezone) {
   const tz = timezone || 'UTC';
   const schedLine = scheduledTime
-    ? `<p style="color:#555">Scheduled: <strong style="color:#1a1a2e">${new Date(scheduledTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: tz, timeZoneName: 'short' })}</strong></p>`
+    ? `<p class="sched">Scheduled: <strong>${new Date(scheduledTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: tz, timeZoneName: 'short' })}</strong></p>`
     : '';
   const heading = isReminder
     ? `Reminder: "${title}" starts ${reminderText}`
     : `You're invited to "${title}"`;
-  return `
-    <div style="font-family:Arial,sans-serif;background:#ffffff;color:#1a1a2e;padding:36px;border-radius:12px;max-width:480px;margin:auto;border:1px solid #d0d8e8">
-      <div style="margin-bottom:24px">
-        <span style="font-size:22px;vertical-align:middle;position:relative;top:-1px">🐟</span>
-        <span style="font-size:1.4rem;font-weight:800;color:#1a1a2e;vertical-align:middle;margin-left:10px">Wish Fish Coding</span>
-      </div>
-      <h2 style="color:#1a1a2e;margin-bottom:12px">${heading}</h2>
-      ${schedLine}
-      <p style="color:#555;margin-bottom:20px">Session code:</p>
-      <div style="background:#f0f4fa;border:1px solid #b0c4de;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
-        <span style="font-family:'Courier New',monospace;font-size:2.2rem;font-weight:900;color:#1e90ff;letter-spacing:4px">${code}</span>
-      </div>
-      <a href="${APP_URL}/session?code=${code}" style="display:inline-block;background:linear-gradient(135deg,#1e90ff,#0070dd);color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Join Session</a>
-    </div>`;
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  .wrap { font-family:Arial,sans-serif; background:#ffffff; color:#1a1a2e; padding:36px; border-radius:12px; max-width:480px; margin:auto; border:1px solid #d0d8e8; }
+  .heading { color:#1a1a2e; margin-bottom:12px; }
+  .sched { color:#555; }
+  .sched strong { color:#1a1a2e; }
+  .label { color:#555; margin-bottom:20px; }
+  .code-box { background:#f0f4fa; border:1px solid #b0c4de; border-radius:10px; padding:20px; text-align:center; margin-bottom:24px; }
+  .code { font-family:'Courier New',monospace; font-size:2.2rem; font-weight:900; color:#1e90ff; letter-spacing:4px; }
+  .btn { display:inline-block; background:linear-gradient(135deg,#1e90ff,#0070dd); color:white !important; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:600; }
+  @media (prefers-color-scheme: dark) {
+    .wrap { background:#161b27 !important; color:#e8f0ff !important; border-color:#2a3550 !important; }
+    .heading { color:#e8f0ff !important; }
+    .sched { color:#7a9cc8 !important; }
+    .sched strong { color:#e8f0ff !important; }
+    .label { color:#7a9cc8 !important; }
+    .code-box { background:#1a2035 !important; border-color:#2a3550 !important; }
+  }
+</style>
+</head><body style="margin:0;padding:16px;background:#f0f4f8">
+<div class="wrap">
+  <div style="margin-bottom:24px">
+    <span style="font-size:22px;vertical-align:middle;position:relative;top:-1px">🐟</span>
+    <span style="font-size:1.4rem;font-weight:800;vertical-align:middle;margin-left:10px">Wish Fish Coding</span>
+  </div>
+  <h2 class="heading">${heading}</h2>
+  ${schedLine}
+  <p class="label">Session code:</p>
+  <div class="code-box">
+    <span class="code">${code}</span>
+  </div>
+  <a href="${APP_URL}/session?code=${code}" class="btn">Join Session</a>
+</div>
+</body></html>`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
