@@ -814,13 +814,13 @@
       const hostItems = isHost ? `
             <button class="p-menu-item" onclick="transferHost('${p.socketId}','${esc(p.username)}')">Make ${esc(p.username)} the Host</button>
             <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
+            ${flagItem}
             <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>` : '';
       const menuHtml = canAct && (flagItem || hostItems) ? `
         <div class="p-menu-wrap">
           <button class="p-menu-btn" onclick="togglePMenu(event,'${p.socketId}')">···</button>
           <div class="p-menu-dropdown" id="pmenu-${p.socketId}">
             ${hostItems}
-            ${flagItem}
           </div>
         </div>` : '';
       return `<div class="participant">
