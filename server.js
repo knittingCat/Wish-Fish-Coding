@@ -125,13 +125,17 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText) {
     : `You're invited to "${title}"`;
   return `
     <div style="font-family:Arial,sans-serif;background:#ffffff;color:#1a1a2e;padding:36px;border-radius:12px;max-width:480px;margin:auto;border:1px solid #d0d8e8">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
+        <span style="font-size:28px">🐟</span>
+        <span style="font-size:1.4rem;font-weight:800;color:#1a1a2e">Wish Fish Coding</span>
+      </div>
       <h2 style="color:#1a1a2e;margin-bottom:12px">${heading}</h2>
       ${schedLine}
       <p style="color:#555;margin-bottom:20px">Session code:</p>
       <div style="background:#f0f4fa;border:1px solid #b0c4de;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
         <span style="font-family:'Courier New',monospace;font-size:2.2rem;font-weight:900;color:#1e90ff;letter-spacing:4px">${code}</span>
       </div>
-      <a href="${APP_URL}/session?code=${code}" style="display:inline-block;background:linear-gradient(135deg,#1e90ff,#0070dd);color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Join</a>
+      <a href="${APP_URL}/session?code=${code}" style="display:inline-block;background:linear-gradient(135deg,#1e90ff,#0070dd);color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Join Session</a>
     </div>`;
 }
 
