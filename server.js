@@ -126,7 +126,7 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText) {
   return `
     <div style="font-family:Arial,sans-serif;background:#ffffff;color:#1a1a2e;padding:36px;border-radius:12px;max-width:480px;margin:auto;border:1px solid #d0d8e8">
       <div style="margin-bottom:24px">
-        <span style="font-size:22px;vertical-align:middle;position:relative;top:-3px">🐟</span>
+        <span style="font-size:22px;vertical-align:middle;position:relative;top:-1px">🐟</span>
         <span style="font-size:1.4rem;font-weight:800;color:#1a1a2e;vertical-align:middle;margin-left:10px">Wish Fish Coding</span>
       </div>
       <h2 style="color:#1a1a2e;margin-bottom:12px">${heading}</h2>
