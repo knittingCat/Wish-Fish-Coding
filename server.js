@@ -83,27 +83,34 @@ async function initDb() {
   console.log('Database ready');
 }
 
-// ── Email (Brevo SMTP) ────────────────────────────────────────────────────────
-const transporter = process.env.BREVO_USER
-  ? nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 587,
-      secure: false,
-      auth: { user: process.env.BREVO_USER, pass: process.env.BREVO_PASS }
-    })
-  : null;
-
+// ── Email (Brevo HTTP API) ────────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
-  if (!transporter) {
+  if (!process.env.BREVO_APIKEY) {
     console.log(`[Email SKIPPED] To: ${to} | Subject: ${subject}`);
     return;
   }
+  const fromAddr = process.env.BREVO_FROM || 'wishfishcodenotifications@gmail.com';
+  console.log(`[Email] Sending to: ${to} | Subject: ${subject} | From: ${fromAddr}`);
   try {
-    const fromAddr = process.env.BREVO_FROM || process.env.BREVO_USER;
-    const from = `"Wish Fish Coding" <${fromAddr}>`;
-    console.log(`[Email] Sending to: ${to} | Subject: ${subject} | From: ${fromAddr}`);
-    await transporter.sendMail({ from, to, subject, html });
-    console.log(`[Email] Sent OK to: ${to}`);
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_APIKEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Wish Fish Coding', email: fromAddr },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html
+      })
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error('[Email error]', res.status, txt);
+    } else {
+      console.log(`[Email] Sent OK to: ${to}`);
+    }
   } catch (err) {
     console.error('[Email error]', err.message);
   }
