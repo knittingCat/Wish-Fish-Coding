@@ -31,7 +31,11 @@ function getToken()    { return sessionStorage.getItem('token'); }
 function getUsername() { return sessionStorage.getItem('username'); }
 
 function requireAuth() {
-  if (!getToken()) { window.location.href = '/'; return false; }
+  if (!getToken()) {
+    const next = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = '/?next=' + next;
+    return false;
+  }
   return true;
 }
 

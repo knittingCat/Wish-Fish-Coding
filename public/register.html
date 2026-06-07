@@ -43,7 +43,8 @@
 
 <script src="/js/app.js"></script>
 <script>
-  if (getToken()) window.location.href = '/dashboard';
+  const _nextParam = new URLSearchParams(window.location.search).get('next');
+  if (getToken()) window.location.href = _nextParam || '/dashboard';
 
   const form     = document.getElementById('regForm');
   const alertEl  = document.getElementById('alert');
@@ -62,7 +63,7 @@
       });
       sessionStorage.setItem('token', data.token);
       sessionStorage.setItem('username', data.username);
-      window.location.href = '/dashboard';
+      window.location.href = _nextParam || '/dashboard';
     } catch (err) {
       alertEl.textContent = err.message;
       alertEl.className = 'alert alert-err show';

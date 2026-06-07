@@ -31,15 +31,17 @@
     </form>
 
     <div class="auth-footer">
-      Don't have an account? <a href="/register">Create one</a>
+      Don't have an account? <a href="/register" id="registerLink">Create one</a>
     </div>
   </div>
 </div>
 
 <script src="/js/app.js"></script>
 <script>
+  const _nextParam = new URLSearchParams(window.location.search).get('next');
   // Already logged in → redirect
-  if (getToken()) window.location.href = '/dashboard';
+  if (getToken()) window.location.href = _nextParam || '/dashboard';
+  if (_nextParam) document.getElementById('registerLink').href = '/register?next=' + encodeURIComponent(_nextParam);
 
   const form    = document.getElementById('loginForm');
   const alertEl = document.getElementById('alert');
@@ -62,7 +64,7 @@
       });
       sessionStorage.setItem('token', data.token);
       sessionStorage.setItem('username', data.username);
-      window.location.href = '/dashboard';
+      window.location.href = _nextParam || '/dashboard';
     } catch (err) {
       showError(err.message);
       submitBtn.disabled = false;
