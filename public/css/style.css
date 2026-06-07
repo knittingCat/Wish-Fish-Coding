@@ -523,7 +523,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
     --accent2: #5aabde;
     --accent-dim: rgba(74,159,213,.15);
     --accent-glow: rgba(74,159,213,.3);
-    --nav-bg: #1e6090;
+    --nav-bg: #5aabde;
     --txt1: #e8f0ff;
     --txt2: #7a9cc8;
     --txt3: #4a6080;
@@ -579,4 +579,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .gate-card { background: var(--bg1); border-color: #2a3550; }
 
   .toast { background: var(--bg1); border-color: #2a3550; color: var(--txt1); }
+
+  .btn-primary { background: #1e6090; box-shadow: none; }
+  .btn-primary:hover { background: #2a7db5; box-shadow: none; }
 }
