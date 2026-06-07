@@ -581,6 +581,11 @@ cron.schedule('* * * * *', async () => {
 
   try {
     for (const opt of Object.keys(REMINDER_OPTS)) await checkReminders(opt);
+    // Auto-activate scheduled sessions whose time has passed
+    await pool.query(`
+      UPDATE sessions SET is_scheduled=0
+      WHERE is_scheduled=1 AND is_active=1 AND scheduled_time <= $1
+    `, [new Date(now).toISOString()]);
   } catch (err) {
     console.error('[Cron error]', err.message);
   }
