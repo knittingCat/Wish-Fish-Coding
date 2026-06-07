@@ -293,7 +293,8 @@
         title,
         is_scheduled: isScheduled,
         scheduled_time: schedTime ? new Date(schedTime).toISOString() : null,
-        reminder_options: reminderOptions
+        reminder_options: reminderOptions,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
 
       // Send invites if any emails entered

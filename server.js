@@ -81,6 +81,7 @@ async function initDb() {
   `);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_flagged BOOLEAN DEFAULT FALSE`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS reminder_options TEXT DEFAULT '["1h","15m"]'`);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC'`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_1d_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_30m_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_5m_sent INTEGER DEFAULT 0`);
@@ -121,9 +122,10 @@ async function sendEmail(to, subject, html) {
   }
 }
 
-function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText) {
+function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, timezone) {
+  const tz = timezone || 'UTC';
   const schedLine = scheduledTime
-    ? `<p style="color:#555">Scheduled: <strong style="color:#1a1a2e">${new Date(scheduledTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' })}</strong></p>`
+    ? `<p style="color:#555">Scheduled: <strong style="color:#1a1a2e">${new Date(scheduledTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: tz, timeZoneName: 'short' })}</strong></p>`
     : '';
   const heading = isReminder
     ? `⏰ Reminder: "${title}" starts ${reminderText}`
@@ -231,13 +233,14 @@ app.get('/api/sessions', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/sessions', authMiddleware, async (req, res) => {
-  const { title, is_scheduled, scheduled_time, reminder_options } = req.body || {};
+  const { title, is_scheduled, scheduled_time, reminder_options, timezone } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Title is required' });
   const code = await uniqueCode();
   const remOpts = JSON.stringify(Array.isArray(reminder_options) && reminder_options.length ? reminder_options : ['1h', '15m']);
+  const tz = timezone || 'UTC';
   const result = await pool.query(
-    'INSERT INTO sessions (code,title,host_id,is_scheduled,scheduled_time,reminder_options) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-    [code, title.trim(), req.user.id, is_scheduled ? 1 : 0, scheduled_time || null, remOpts]
+    'INSERT INTO sessions (code,title,host_id,is_scheduled,scheduled_time,reminder_options,timezone) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+    [code, title.trim(), req.user.id, is_scheduled ? 1 : 0, scheduled_time || null, remOpts, tz]
   );
   res.json(result.rows[0]);
 });
@@ -273,7 +276,7 @@ app.post('/api/sessions/:code/invite', authMiddleware, async (req, res) => {
     const subj = session.is_scheduled
       ? `You're invited to "${session.title}" on Wish Fish Coding`
       : `Join "${session.title}" now on Wish Fish Coding`;
-    sendEmail(email, subj, inviteEmailHtml(session.title, session.code, session.scheduled_time, false, ''));
+    sendEmail(email, subj, inviteEmailHtml(session.title, session.code, session.scheduled_time, false, '', session.timezone));
   }
   res.json({ success: true });
 });
@@ -561,7 +564,7 @@ cron.schedule('* * * * *', async () => {
     const lo = new Date(target - win).toISOString();
     const hi = new Date(target + win).toISOString();
     const result = await pool.query(`
-      SELECT i.id, i.email, s.title, s.code, s.scheduled_time
+      SELECT i.id, i.email, s.title, s.code, s.scheduled_time, s.timezone
       FROM invites i JOIN sessions s ON i.session_id=s.id
       WHERE s.is_scheduled=1 AND s.is_active=1
         AND i.${col}=0
@@ -572,7 +575,7 @@ cron.schedule('* * * * *', async () => {
       const subj = opt === 'now'
         ? `"${r.title}" is starting now`
         : `Reminder: "${r.title}" starts ${label}`;
-      sendEmail(r.email, subj, inviteEmailHtml(r.title, r.code, r.scheduled_time, true, label));
+      sendEmail(r.email, subj, inviteEmailHtml(r.title, r.code, r.scheduled_time, true, label, r.timezone));
       await pool.query(`UPDATE invites SET ${col}=1 WHERE id=$1`, [r.id]);
     }
   }
