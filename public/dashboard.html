@@ -344,10 +344,12 @@
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
     try {
       const result = await API.post(`/api/sessions/${inviteTarget}/invite`, { emails });
-      closeOverlay('inviteOverlay');
       if (result.notFound?.length) {
-        toast(`Invited ${emails.length - result.notFound.length}, not found: ${result.notFound.join(', ')}`, 'err');
+        alertEl.textContent = `Not found: ${result.notFound.join(', ')}`;
+        alertEl.className = 'alert alert-err show';
+        if (emails.length > result.notFound.length) toast(`Invited ${emails.length - result.notFound.length} person(s)`, 'ok');
       } else {
+        closeOverlay('inviteOverlay');
         toast(`Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`, 'ok');
       }
       await loadSessions();
