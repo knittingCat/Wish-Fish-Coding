@@ -812,8 +812,8 @@
         ? `<button class="p-menu-item" onclick="flagUser('${p.socketId}')">Flag ${esc(p.username)}</button>`
         : '';
       const hostItems = isHost ? `
-            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
             <button class="p-menu-item" onclick="transferHost('${p.socketId}','${esc(p.username)}')">Make ${esc(p.username)} the Host</button>
+            <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
             <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>` : '';
       const menuHtml = canAct && (flagItem || hostItems) ? `
         <div class="p-menu-wrap">
