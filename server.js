@@ -128,7 +128,7 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, t
     ? `<p style="color:#555">Scheduled: <strong style="color:#1a1a2e">${new Date(scheduledTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: tz, timeZoneName: 'short' })}</strong></p>`
     : '';
   const heading = isReminder
-    ? `⏰ Reminder: "${title}" starts ${reminderText}`
+    ? `Reminder: "${title}" starts ${reminderText}`
     : `You're invited to "${title}"`;
   return `
     <div style="font-family:Arial,sans-serif;background:#ffffff;color:#1a1a2e;padding:36px;border-radius:12px;max-width:480px;margin:auto;border:1px solid #d0d8e8">
