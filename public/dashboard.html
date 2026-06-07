@@ -71,6 +71,7 @@
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem1h" checked> 1 hour before</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem30m"> 30 minutes before</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem15m" checked> 15 minutes before</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="remNow" checked> At start time</label>
         </div>
       </div>
     </div>
@@ -252,6 +253,7 @@
     document.getElementById('rem1h').checked = true;
     document.getElementById('rem30m').checked = false;
     document.getElementById('rem15m').checked = true;
+    document.getElementById('remNow').checked = true;
     document.getElementById('createAlert').className = 'alert';
     const wrap = document.getElementById('createTagsWrap');
     wrap.querySelectorAll('.tag').forEach(t => t.remove());
@@ -280,6 +282,7 @@
       if (document.getElementById('rem1h').checked)  reminderOptions.push('1h');
       if (document.getElementById('rem30m').checked) reminderOptions.push('30m');
       if (document.getElementById('rem15m').checked) reminderOptions.push('15m');
+      if (document.getElementById('remNow').checked) reminderOptions.push('now');
     }
 
     const btn = document.getElementById('createBtn');

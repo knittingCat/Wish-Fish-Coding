@@ -83,6 +83,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS reminder_options TEXT DEFAULT '["1h","15m"]'`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_1d_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_30m_sent INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_now_sent INTEGER DEFAULT 0`);
   console.log('Database ready');
 }
 
@@ -542,10 +543,11 @@ io.on('connection', (socket) => {
 
 // ── Email reminders cron ──────────────────────────────────────────────────────
 const REMINDER_OPTS = {
-  '1d':  { ms: 86400000, col: 'reminder_1d_sent',  label: 'in 1 day' },
-  '1h':  { ms: 3600000,  col: 'reminder_1h_sent',  label: 'in 1 hour' },
-  '30m': { ms: 1800000,  col: 'reminder_30m_sent', label: 'in 30 minutes' },
+  'now': { ms: 0,        col: 'reminder_now_sent', label: 'now' },
   '15m': { ms: 900000,   col: 'reminder_15m_sent', label: 'in 15 minutes' },
+  '30m': { ms: 1800000,  col: 'reminder_30m_sent', label: 'in 30 minutes' },
+  '1h':  { ms: 3600000,  col: 'reminder_1h_sent',  label: 'in 1 hour' },
+  '1d':  { ms: 86400000, col: 'reminder_1d_sent',  label: 'in 1 day' },
 };
 
 cron.schedule('* * * * *', async () => {
@@ -554,8 +556,9 @@ cron.schedule('* * * * *', async () => {
 
   async function checkReminders(opt) {
     const { ms, col, label } = REMINDER_OPTS[opt];
-    const lo = new Date(now + ms - win).toISOString();
-    const hi = new Date(now + ms + win).toISOString();
+    const target = now - ms;
+    const lo = new Date(target - win).toISOString();
+    const hi = new Date(target + win).toISOString();
     const result = await pool.query(`
       SELECT i.id, i.email, s.title, s.code, s.scheduled_time
       FROM invites i JOIN sessions s ON i.session_id=s.id
@@ -565,8 +568,10 @@ cron.schedule('* * * * *', async () => {
         AND s.reminder_options LIKE $3
     `, [lo, hi, `%"${opt}"%`]);
     for (const r of result.rows) {
-      sendEmail(r.email, `Reminder: "${r.title}" starts ${label}`,
-        inviteEmailHtml(r.title, r.code, r.scheduled_time, true, label));
+      const subj = opt === 'now'
+        ? `"${r.title}" is starting now`
+        : `Reminder: "${r.title}" starts ${label}`;
+      sendEmail(r.email, subj, inviteEmailHtml(r.title, r.code, r.scheduled_time, true, label));
       await pool.query(`UPDATE invites SET ${col}=1 WHERE id=$1`, [r.id]);
     }
   }
