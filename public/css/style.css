@@ -580,6 +580,4 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 
   .toast { background: var(--bg1); border-color: #2a3550; color: var(--txt1); }
 
-  .btn-primary { background: #1e6090; box-shadow: none; }
-  .btn-primary:hover { background: #2a7db5; box-shadow: none; }
 }
