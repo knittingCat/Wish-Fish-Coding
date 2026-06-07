@@ -913,9 +913,15 @@
     const alertEl = document.getElementById('inviteSessionAlert');
     if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
     try {
-      await API.post(`/api/sessions/${CODE}/invite`, { emails });
-      alertEl.textContent = `Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`;
-      alertEl.className = 'alert alert-ok show';
+      const result = await API.post(`/api/sessions/${CODE}/invite`, { emails });
+      if (result.notFound?.length) {
+        alertEl.textContent = `Not found: ${result.notFound.join(', ')}`;
+        alertEl.className = 'alert alert-err show';
+        if (emails.length > result.notFound.length) toast(`Invited ${emails.length - result.notFound.length} person(s)`, 'ok');
+      } else {
+        alertEl.textContent = `Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`;
+        alertEl.className = 'alert alert-ok show';
+      }
     } catch (err) {
       alertEl.textContent = err.message;
       alertEl.className = 'alert alert-err show';
@@ -937,15 +943,21 @@
   async function sendModalInvites() {
     const emails = modalTagCtrl.getTags();
     const raw = document.getElementById('modalEmailInput').value.trim();
-    if (raw && raw.includes('@')) emails.push(raw);
+    if (raw) emails.push(raw);
     const alertEl = document.getElementById('modalInviteAlert');
     if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
     const btn = document.getElementById('modalInviteBtn');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
     try {
-      await API.post(`/api/sessions/${CODE}/invite`, { emails });
-      closeOverlay('inviteOverlay');
-      toast(`Invites sent!`, 'ok');
+      const result = await API.post(`/api/sessions/${CODE}/invite`, { emails });
+      if (result.notFound?.length) {
+        alertEl.textContent = `Not found: ${result.notFound.join(', ')}`;
+        alertEl.className = 'alert alert-err show';
+        if (emails.length > result.notFound.length) toast(`Invited ${emails.length - result.notFound.length} person(s)`, 'ok');
+      } else {
+        closeOverlay('inviteOverlay');
+        toast(`Invites sent!`, 'ok');
+      }
     } catch (err) {
       alertEl.textContent = err.message;
       alertEl.className = 'alert alert-err show';
