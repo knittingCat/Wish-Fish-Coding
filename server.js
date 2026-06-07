@@ -99,8 +99,11 @@ async function sendEmail(to, subject, html) {
     return;
   }
   try {
-    const from = `"Wish Fish Coding" <${process.env.BREVO_USER}>`;
+    const fromAddr = process.env.BREVO_FROM || process.env.BREVO_USER;
+    const from = `"Wish Fish Coding" <${fromAddr}>`;
+    console.log(`[Email] Sending to: ${to} | Subject: ${subject} | From: ${fromAddr}`);
     await transporter.sendMail({ from, to, subject, html });
+    console.log(`[Email] Sent OK to: ${to}`);
   } catch (err) {
     console.error('[Email error]', err.message);
   }
