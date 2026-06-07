@@ -67,10 +67,10 @@
       <div class="form-group">
         <label>Reminders</label>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
-          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem1d"> 1 day before</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem1h" checked> 1 hour before</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem30m"> 30 minutes before</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem15m" checked> 15 minutes before</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem5m"> 5 minutes before</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="remNow" checked> At start time</label>
         </div>
       </div>
@@ -249,10 +249,10 @@
     document.getElementById('isScheduled').checked = false;
     document.getElementById('scheduledFields').style.display = 'none';
     document.getElementById('schedTime').value = '';
-    document.getElementById('rem1d').checked = false;
     document.getElementById('rem1h').checked = true;
     document.getElementById('rem30m').checked = false;
     document.getElementById('rem15m').checked = true;
+    document.getElementById('rem5m').checked = false;
     document.getElementById('remNow').checked = true;
     document.getElementById('createAlert').className = 'alert';
     const wrap = document.getElementById('createTagsWrap');
@@ -278,10 +278,10 @@
 
     const reminderOptions = [];
     if (isScheduled) {
-      if (document.getElementById('rem1d').checked)  reminderOptions.push('1d');
       if (document.getElementById('rem1h').checked)  reminderOptions.push('1h');
       if (document.getElementById('rem30m').checked) reminderOptions.push('30m');
       if (document.getElementById('rem15m').checked) reminderOptions.push('15m');
+      if (document.getElementById('rem5m').checked)  reminderOptions.push('5m');
       if (document.getElementById('remNow').checked) reminderOptions.push('now');
     }
 

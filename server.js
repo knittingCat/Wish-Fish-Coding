@@ -83,6 +83,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS reminder_options TEXT DEFAULT '["1h","15m"]'`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_1d_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_30m_sent INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_5m_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_now_sent INTEGER DEFAULT 0`);
   console.log('Database ready');
 }
@@ -543,11 +544,11 @@ io.on('connection', (socket) => {
 
 // ── Email reminders cron ──────────────────────────────────────────────────────
 const REMINDER_OPTS = {
-  'now': { ms: 0,        col: 'reminder_now_sent', label: 'now' },
-  '15m': { ms: 900000,   col: 'reminder_15m_sent', label: 'in 15 minutes' },
-  '30m': { ms: 1800000,  col: 'reminder_30m_sent', label: 'in 30 minutes' },
-  '1h':  { ms: 3600000,  col: 'reminder_1h_sent',  label: 'in 1 hour' },
-  '1d':  { ms: 86400000, col: 'reminder_1d_sent',  label: 'in 1 day' },
+  'now': { ms: 0,       col: 'reminder_now_sent', label: 'now' },
+  '5m':  { ms: 300000,  col: 'reminder_5m_sent',  label: 'in 5 minutes' },
+  '15m': { ms: 900000,  col: 'reminder_15m_sent', label: 'in 15 minutes' },
+  '30m': { ms: 1800000, col: 'reminder_30m_sent', label: 'in 30 minutes' },
+  '1h':  { ms: 3600000, col: 'reminder_1h_sent',  label: 'in 1 hour' },
 };
 
 cron.schedule('* * * * *', async () => {
