@@ -124,18 +124,14 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText) {
     ? `⏰ Reminder: "${title}" starts ${reminderText}`
     : `You're invited to "${title}"`;
   return `
-    <div style="font-family:Arial,sans-serif;background:#0a0e1a;color:#e8f0ff;padding:36px;border-radius:12px;max-width:480px;margin:auto;border:1px solid rgba(30,144,255,.2)">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
-        <span style="font-size:28px">🐟</span>
-        <span style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#1e90ff,#00b4d8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Wish Fish Coding</span>
-      </div>
-      <h2 style="color:#e8f0ff;margin-bottom:12px">${heading}</h2>
+    <div style="font-family:Arial,sans-serif;background:#ffffff;color:#1a1a2e;padding:36px;border-radius:12px;max-width:480px;margin:auto;border:1px solid #d0d8e8">
+      <h2 style="color:#1a1a2e;margin-bottom:12px">${heading}</h2>
       ${schedLine}
-      <p style="color:#7a9cc8;margin-bottom:20px">Session code:</p>
-      <div style="background:#111c35;border:1px solid rgba(30,144,255,.4);border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
+      <p style="color:#555;margin-bottom:20px">Session code:</p>
+      <div style="background:#f0f4fa;border:1px solid #b0c4de;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
         <span style="font-family:'Courier New',monospace;font-size:2.2rem;font-weight:900;color:#1e90ff;letter-spacing:4px">${code}</span>
       </div>
-      <a href="${APP_URL}" style="display:inline-block;background:linear-gradient(135deg,#1e90ff,#0070dd);color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Open Wish Fish Coding</a>
+      <a href="${APP_URL}/session?code=${code}" style="display:inline-block;background:linear-gradient(135deg,#1e90ff,#0070dd);color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Join</a>
     </div>`;
 }
 
