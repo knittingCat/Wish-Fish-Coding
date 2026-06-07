@@ -222,6 +222,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 app.get('/api/sessions', authMiddleware, async (req, res) => {
+  await pool.query(`UPDATE sessions SET is_scheduled=0 WHERE is_scheduled=1 AND is_active=1 AND scheduled_time <= NOW()`);
   const result = await pool.query(`
     SELECT s.*, u.username AS host_username,
       (SELECT COUNT(*) FROM participants WHERE session_id=s.id) AS participant_count,
