@@ -117,7 +117,7 @@
         <div class="form-group">
           <label>Or send invite emails</label>
           <div class="tags-wrap" id="inviteTagsWrap">
-            <input type="text" id="inviteEmailInput" placeholder="Type email and press Enter…">
+            <input type="text" id="inviteEmailInput" placeholder="Email or username, press Enter…">
           </div>
         </div>
         <button class="btn btn-primary btn-full" onclick="sendInvitesInSession()">Send Invites</button>
@@ -909,7 +909,7 @@
   async function sendInvitesInSession() {
     const emails = sideTagCtrl.getTags();
     const raw = document.getElementById('inviteEmailInput').value.trim();
-    if (raw && raw.includes('@')) emails.push(raw);
+    if (raw) emails.push(raw);
     const alertEl = document.getElementById('inviteSessionAlert');
     if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
     try {
