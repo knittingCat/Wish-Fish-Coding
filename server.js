@@ -267,9 +267,18 @@ app.post('/api/sessions/:code/invite', authMiddleware, async (req, res) => {
   const sessRes = await pool.query('SELECT * FROM sessions WHERE code=$1', [req.params.code.toUpperCase()]);
   const session = sessRes.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found' });
+  const notFound = [];
   for (const raw of emails) {
-    const email = raw.trim().toLowerCase();
-    if (!email) continue;
+    const entry = raw.trim();
+    if (!entry) continue;
+    let email;
+    if (entry.includes('@')) {
+      email = entry.toLowerCase();
+    } else {
+      const userRes = await pool.query('SELECT email FROM users WHERE LOWER(username)=$1', [entry.toLowerCase()]);
+      if (!userRes.rows[0]) { notFound.push(entry); continue; }
+      email = userRes.rows[0].email;
+    }
     await pool.query(
       'INSERT INTO invites (session_id,email) VALUES ($1,$2) ON CONFLICT DO NOTHING',
       [session.id, email]
@@ -279,6 +288,7 @@ app.post('/api/sessions/:code/invite', authMiddleware, async (req, res) => {
       : `Join "${session.title}" now on Wish Fish Coding`;
     sendEmail(email, subj, inviteEmailHtml(session.title, session.code, session.scheduled_time, false, '', session.timezone));
   }
+  if (notFound.length) return res.status(207).json({ success: true, notFound });
   res.json({ success: true });
 });
 

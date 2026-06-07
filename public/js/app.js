@@ -90,8 +90,6 @@ function initTagsInput(container, inputEl) {
 
   function addTag(val) {
     if (!val || tags.includes(val)) return;
-    // Basic email check
-    if (!val.includes('@')) { toast('Enter a valid email', 'err'); return; }
     tags.push(val);
     inputEl.value = '';
     renderTags();

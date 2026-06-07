@@ -78,7 +78,7 @@
     <div class="form-group">
       <label>Invite People <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.85rem;color:var(--txt3)">(optional)</span></label>
       <div class="tags-wrap" id="createTagsWrap">
-        <input type="text" id="createEmailInput" placeholder="Type email and press Enter…">
+        <input type="text" id="createEmailInput" placeholder="Email or username, press Enter…">
       </div>
       <p style="color:var(--txt3);font-size:0.75rem;margin-top:6px">Press Enter or comma after each email</p>
     </div>
@@ -103,7 +103,7 @@
     <div class="form-group">
       <label>Email Addresses</label>
       <div class="tags-wrap" id="tagsWrap">
-        <input type="text" id="emailInput" placeholder="Type email and press Enter…">
+        <input type="text" id="emailInput" placeholder="Email or username, press Enter…">
       </div>
       <p style="color:var(--txt3);font-size:0.75rem;margin-top:6px">Press Enter or comma after each email</p>
     </div>
@@ -302,7 +302,7 @@
       // Send invites if any emails entered
       const emails = createTagController.getTags();
       const raw = document.getElementById('createEmailInput').value.trim();
-      if (raw && raw.includes('@')) emails.push(raw);
+      if (raw) emails.push(raw);
       if (emails.length) {
         await API.post(`/api/sessions/${sess.code}/invite`, { emails });
       }
@@ -335,7 +335,7 @@
   async function sendInvites() {
     const emails = tagController.getTags();
     const raw = document.getElementById('emailInput').value.trim();
-    if (raw && raw.includes('@')) emails.push(raw);
+    if (raw) emails.push(raw);
     const alertEl = document.getElementById('inviteAlert');
 
     if (!emails.length) { alertEl.textContent = 'Add at least one email'; alertEl.className = 'alert alert-err show'; return; }
@@ -343,9 +343,13 @@
     const btn = document.getElementById('inviteBtn');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
     try {
-      await API.post(`/api/sessions/${inviteTarget}/invite`, { emails });
+      const result = await API.post(`/api/sessions/${inviteTarget}/invite`, { emails });
       closeOverlay('inviteOverlay');
-      toast(`Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`, 'ok');
+      if (result.notFound?.length) {
+        toast(`Invited ${emails.length - result.notFound.length}, not found: ${result.notFound.join(', ')}`, 'err');
+      } else {
+        toast(`Invites sent to ${emails.length} person${emails.length > 1 ? 's' : ''}!`, 'ok');
+      }
       await loadSessions();
     } catch (err) {
       alertEl.textContent = err.message;
