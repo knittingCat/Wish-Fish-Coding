@@ -80,6 +80,9 @@ async function initDb() {
     );
   `);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_flagged BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS reminder_options TEXT DEFAULT '["1h","15m"]'`);
+  await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_1d_sent INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_30m_sent INTEGER DEFAULT 0`);
   console.log('Database ready');
 }
 
@@ -118,7 +121,7 @@ async function sendEmail(to, subject, html) {
 
 function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText) {
   const schedLine = scheduledTime
-    ? `<p style="color:#7a9cc8">Scheduled: <strong style="color:#e8f0ff">${new Date(scheduledTime).toLocaleString()}</strong></p>`
+    ? `<p style="color:#555">Scheduled: <strong style="color:#1a1a2e">${new Date(scheduledTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' })}</strong></p>`
     : '';
   const heading = isReminder
     ? `⏰ Reminder: "${title}" starts ${reminderText}`
@@ -226,12 +229,13 @@ app.get('/api/sessions', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/sessions', authMiddleware, async (req, res) => {
-  const { title, is_scheduled, scheduled_time } = req.body || {};
+  const { title, is_scheduled, scheduled_time, reminder_options } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Title is required' });
   const code = await uniqueCode();
+  const remOpts = JSON.stringify(Array.isArray(reminder_options) && reminder_options.length ? reminder_options : ['1h', '15m']);
   const result = await pool.query(
-    'INSERT INTO sessions (code,title,host_id,is_scheduled,scheduled_time) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-    [code, title.trim(), req.user.id, is_scheduled ? 1 : 0, scheduled_time || null]
+    'INSERT INTO sessions (code,title,host_id,is_scheduled,scheduled_time,reminder_options) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+    [code, title.trim(), req.user.id, is_scheduled ? 1 : 0, scheduled_time || null, remOpts]
   );
   res.json(result.rows[0]);
 });
@@ -537,31 +541,38 @@ io.on('connection', (socket) => {
 });
 
 // ── Email reminders cron ──────────────────────────────────────────────────────
+const REMINDER_OPTS = {
+  '1d':  { ms: 86400000, col: 'reminder_1d_sent',  label: 'in 1 day' },
+  '1h':  { ms: 3600000,  col: 'reminder_1h_sent',  label: 'in 1 hour' },
+  '30m': { ms: 1800000,  col: 'reminder_30m_sent', label: 'in 30 minutes' },
+  '15m': { ms: 900000,   col: 'reminder_15m_sent', label: 'in 15 minutes' },
+};
+
 cron.schedule('* * * * *', async () => {
   const now = Date.now();
-  const window = 90 * 1000;
+  const win = 90 * 1000;
 
-  async function checkReminders(offsetMs, sentCol) {
-    const lo = new Date(now + offsetMs - window).toISOString();
-    const hi = new Date(now + offsetMs + window).toISOString();
+  async function checkReminders(opt) {
+    const { ms, col, label } = REMINDER_OPTS[opt];
+    const lo = new Date(now + ms - win).toISOString();
+    const hi = new Date(now + ms + win).toISOString();
     const result = await pool.query(`
       SELECT i.id, i.email, s.title, s.code, s.scheduled_time
       FROM invites i JOIN sessions s ON i.session_id=s.id
       WHERE s.is_scheduled=1 AND s.is_active=1
-        AND i.${sentCol}=0
+        AND i.${col}=0
         AND s.scheduled_time BETWEEN $1 AND $2
-    `, [lo, hi]);
+        AND s.reminder_options LIKE $3
+    `, [lo, hi, `%"${opt}"%`]);
     for (const r of result.rows) {
-      const label = offsetMs >= 3600000 ? 'in 1 hour' : 'in 15 minutes';
       sendEmail(r.email, `Reminder: "${r.title}" starts ${label}`,
         inviteEmailHtml(r.title, r.code, r.scheduled_time, true, label));
-      await pool.query(`UPDATE invites SET ${sentCol}=1 WHERE id=$1`, [r.id]);
+      await pool.query(`UPDATE invites SET ${col}=1 WHERE id=$1`, [r.id]);
     }
   }
 
   try {
-    await checkReminders(3600000, 'reminder_1h_sent');
-    await checkReminders(900000,  'reminder_15m_sent');
+    for (const opt of Object.keys(REMINDER_OPTS)) await checkReminders(opt);
   } catch (err) {
     console.error('[Cron error]', err.message);
   }

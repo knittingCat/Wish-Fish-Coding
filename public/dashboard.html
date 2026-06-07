@@ -64,6 +64,22 @@
         <label for="schedTime">Date &amp; Time</label>
         <input type="datetime-local" id="schedTime">
       </div>
+      <div class="form-group">
+        <label>Reminders</label>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem1d"> 1 day before</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem1h" checked> 1 hour before</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem30m"> 30 minutes before</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="rem15m" checked> 15 minutes before</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Invite People <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.85rem;color:var(--txt3)">(optional)</span></label>
+      <div class="tags-wrap" id="createTagsWrap">
+        <input type="text" id="createEmailInput" placeholder="Type email and press Enter…">
+      </div>
+      <p style="color:var(--txt3);font-size:0.75rem;margin-top:6px">Press Enter or comma after each email</p>
     </div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeOverlay('createOverlay')">Cancel</button>
@@ -144,6 +160,7 @@
   let inviteTarget = null;
   let deleteTarget = null;
   let tagController = null;
+  let createTagController = null;
 
   // ── Load sessions ──────────────────────────────────────────────────────────
   async function loadSessions() {
@@ -230,7 +247,16 @@
     document.getElementById('sessTitle').value = '';
     document.getElementById('isScheduled').checked = false;
     document.getElementById('scheduledFields').style.display = 'none';
+    document.getElementById('schedTime').value = '';
+    document.getElementById('rem1d').checked = false;
+    document.getElementById('rem1h').checked = true;
+    document.getElementById('rem30m').checked = false;
+    document.getElementById('rem15m').checked = true;
     document.getElementById('createAlert').className = 'alert';
+    const wrap = document.getElementById('createTagsWrap');
+    wrap.querySelectorAll('.tag').forEach(t => t.remove());
+    document.getElementById('createEmailInput').value = '';
+    createTagController = initTagsInput(wrap, document.getElementById('createEmailInput'));
     openOverlay('createOverlay');
   }
 
@@ -248,6 +274,14 @@
     if (!title) { alertEl.textContent = 'Title is required'; alertEl.className = 'alert alert-err show'; return; }
     if (isScheduled && !schedTime) { alertEl.textContent = 'Please pick a date and time'; alertEl.className = 'alert alert-err show'; return; }
 
+    const reminderOptions = [];
+    if (isScheduled) {
+      if (document.getElementById('rem1d').checked)  reminderOptions.push('1d');
+      if (document.getElementById('rem1h').checked)  reminderOptions.push('1h');
+      if (document.getElementById('rem30m').checked) reminderOptions.push('30m');
+      if (document.getElementById('rem15m').checked) reminderOptions.push('15m');
+    }
+
     const btn = document.getElementById('createBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
@@ -255,8 +289,18 @@
       const sess = await API.post('/api/sessions', {
         title,
         is_scheduled: isScheduled,
-        scheduled_time: schedTime ? new Date(schedTime).toISOString() : null
+        scheduled_time: schedTime ? new Date(schedTime).toISOString() : null,
+        reminder_options: reminderOptions
       });
+
+      // Send invites if any emails entered
+      const emails = createTagController.getTags();
+      const raw = document.getElementById('createEmailInput').value.trim();
+      if (raw && raw.includes('@')) emails.push(raw);
+      if (emails.length) {
+        await API.post(`/api/sessions/${sess.code}/invite`, { emails });
+      }
+
       closeOverlay('createOverlay');
       toast(`Session ${sess.code} created!`, 'ok');
       await loadSessions();
