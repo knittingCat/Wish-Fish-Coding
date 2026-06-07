@@ -560,9 +560,8 @@ cron.schedule('* * * * *', async () => {
 
   async function checkReminders(opt) {
     const { ms, col, label } = REMINDER_OPTS[opt];
-    const target = now - ms;
-    const lo = new Date(target - win).toISOString();
-    const hi = new Date(target + win).toISOString();
+    const lo = new Date(now + ms - win).toISOString();
+    const hi = new Date(now + ms + win).toISOString();
     const result = await pool.query(`
       SELECT i.id, i.email, s.title, s.code, s.scheduled_time, s.timezone
       FROM invites i JOIN sessions s ON i.session_id=s.id
