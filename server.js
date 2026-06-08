@@ -182,7 +182,7 @@ async function uniqueCode() {
   let code;
   do {
     code = genCode();
-    const res = await pool.query('SELECT id FROM sessions WHERE code=$1', [code]);
+    const res = await pool.query('SELECT id FROM sessions WHERE code=$1 AND is_active=1', [code]);
     if (res.rows.length === 0) break;
   } while (true);
   return code;
