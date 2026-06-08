@@ -924,7 +924,7 @@
   }
   function flagUser(socketId) {
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
-    const p = participants.get(socketId);
+    const p = lastParticipants.find(p => p.socketId === socketId);
     if (!confirm(`Flag ${p?.username || 'this user'} for review?`)) return;
     socket.emit('flag-user', { targetSocketId: socketId });
   }
