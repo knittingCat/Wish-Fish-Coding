@@ -528,8 +528,8 @@
 
     socket.on('join-denied', () => {
       document.getElementById('gateSpinner').style.display = 'none';
-      document.getElementById('gateTitle').textContent = 'Request Denied';
-      document.getElementById('gateMsg').textContent = 'The host declined your request to join.';
+      document.getElementById('gateTitle').textContent = 'Access Denied';
+      document.getElementById('gateMsg').textContent = 'The host denied your request. You cannot join this session.';
       document.getElementById('gateBtn').style.display = '';
     });
 

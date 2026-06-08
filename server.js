@@ -409,7 +409,7 @@ io.on('connection', (socket) => {
     if (state.waitingRoomEnabled && session.host_id !== socket.user.id) {
       socket.pendingRoom = room;
       socket.pendingSession = session;
-      state.waitingRoom.set(socket.id, { socketId: socket.id, username: socket.user.username });
+      state.waitingRoom.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id });
       socket.emit('join-waiting');
       broadcastWaitingRoom(room, state);
       return;
@@ -615,8 +615,15 @@ io.on('connection', (socket) => {
     if (!await verifyHost(socket)) return;
     const state = roomState.get(socket.sessionCode);
     if (!state) return;
+    const waiting = state.waitingRoom.get(targetSocketId);
     state.waitingRoom.delete(targetSocketId);
     broadcastWaitingRoom(socket.sessionCode, state);
+    if (waiting?.userId) {
+      await pool.query(
+        'INSERT INTO session_bans (session_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [socket.sessionDbId, waiting.userId]
+      );
+    }
     const target = io.sockets.sockets.get(targetSocketId);
     if (target) target.emit('join-denied');
   });
