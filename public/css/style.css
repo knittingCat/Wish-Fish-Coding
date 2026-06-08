@@ -373,6 +373,14 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .p-suspended{ font-size: 0.68rem; color: var(--txt3);  margin-left: 6px; font-weight: 700; }
 .p-flagged  { font-size: 0.68rem; color: var(--err);   margin-left: 6px; font-weight: 700; }
 
+/* Waiting room section */
+.waiting-section { border-bottom: 1px solid var(--border); padding: 10px 12px; background: rgba(74,159,213,.06); }
+.waiting-section-head { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.waiting-count { background: var(--accent); color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 0.68rem; margin-left: 4px; }
+.waiting-user { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 5px; }
+.waiting-user-name { font-size: 0.85rem; font-weight: 600; color: var(--txt1); }
+.waiting-actions { display: flex; gap: 5px; }
+
 /* Participant three-dot menu */
 .p-menu-wrap { position: relative; flex-shrink: 0; }
 .p-menu-btn {
@@ -571,6 +579,9 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .audio-participants-list { background: var(--bg0); }
   .audio-participant { background: var(--bg2); border-color: #2a3550; }
   .audio-leave-bar { background: var(--bg1); border-color: #2a3550; }
+
+  .waiting-section { background: rgba(74,159,213,.08); border-color: #2a3550; }
+  .waiting-user { background: var(--bg2); border-color: #2a3550; }
 
   .p-menu-dropdown { background: var(--bg1); border-color: #2a3550; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
   .p-menu-item { color: var(--txt1); }

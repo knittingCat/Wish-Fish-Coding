@@ -344,6 +344,31 @@ app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const roomState = new Map();
 
+function broadcastWaitingRoom(room, state) {
+  io.to(room).emit('waiting-room-update', { waiting: [...state.waitingRoom.values()] });
+}
+
+async function doJoin(socket, session, room, state) {
+  const flagRow = await pool.query('SELECT is_flagged FROM users WHERE id=$1', [socket.user.id]);
+  const isFlagged = flagRow.rows[0]?.is_flagged || false;
+
+  socket.join(room);
+  socket.sessionCode = room;
+  socket.sessionDbId = session.id;
+
+  state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id, suspended: false, flagged: isFlagged });
+
+  await pool.query(
+    'INSERT INTO participants (session_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+    [session.id, socket.user.id]
+  );
+
+  const peers = [...state.participants.values()].filter(p => p.socketId !== socket.id);
+  socket.emit('room-state', { peers, sharerIds: [...state.sharerIds], isLocked: state.isLocked, waitingRoomEnabled: state.waitingRoomEnabled });
+  io.to(room).emit('participants-update', [...state.participants.values()]);
+  socket.to(room).emit('user-joined', { socketId: socket.id, username: socket.user.username });
+}
+
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   if (!token) return next(new Error('Authentication required'));
@@ -362,7 +387,6 @@ io.on('connection', (socket) => {
     const session = result.rows[0];
     if (!session) { socket.emit('error', { message: 'Session not found' }); return; }
 
-    // Check ban before anything else
     const banRow = await pool.query(
       'SELECT 1 FROM session_bans WHERE session_id=$1 AND user_id=$2',
       [session.id, socket.user.id]
@@ -372,34 +396,26 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Check lock
-    const existingState = roomState.get(room);
-    if (existingState?.isLocked && session.host_id !== socket.user.id) {
+    if (!roomState.has(room)) {
+      roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false, audioParticipants: new Map(), waitingRoom: new Map(), waitingRoomEnabled: false });
+    }
+    const state = roomState.get(room);
+
+    if (state.isLocked && session.host_id !== socket.user.id) {
       socket.emit('join-rejected', { message: 'This session is locked by the host.' });
       return;
     }
 
-    // Load flag status from user profile
-    const flagRow = await pool.query('SELECT is_flagged FROM users WHERE id=$1', [socket.user.id]);
-    const isFlagged = flagRow.rows[0]?.is_flagged || false;
+    if (state.waitingRoomEnabled && session.host_id !== socket.user.id) {
+      socket.pendingRoom = room;
+      socket.pendingSession = session;
+      state.waitingRoom.set(socket.id, { socketId: socket.id, username: socket.user.username });
+      socket.emit('join-waiting');
+      broadcastWaitingRoom(room, state);
+      return;
+    }
 
-    socket.join(room);
-    socket.sessionCode = room;
-    socket.sessionDbId = session.id;
-
-    if (!roomState.has(room)) roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false, audioParticipants: new Map() });
-    const state = roomState.get(room);
-    state.participants.set(socket.id, { socketId: socket.id, username: socket.user.username, userId: socket.user.id, suspended: false, flagged: isFlagged });
-
-    await pool.query(
-      'INSERT INTO participants (session_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [session.id, socket.user.id]
-    );
-
-    const peers = [...state.participants.values()].filter(p => p.socketId !== socket.id);
-    socket.emit('room-state', { peers, sharerIds: [...state.sharerIds], isLocked: state.isLocked });
-    io.to(room).emit('participants-update', [...state.participants.values()]);
-    socket.to(room).emit('user-joined', { socketId: socket.id, username: socket.user.username });
+    await doJoin(socket, session, room, state);
   });
 
   socket.on('chat-message', async ({ content }) => {
@@ -558,7 +574,62 @@ io.on('connection', (socket) => {
     io.to(socket.sessionCode).emit('audio-user-muted', { socketId: socket.id, muted: entry.muted });
   });
 
+  socket.on('toggle-waiting-room', async () => {
+    if (!socket.sessionCode) return;
+    const r = await pool.query('SELECT host_id FROM sessions WHERE code=$1', [socket.sessionCode]);
+    if (!r.rows[0] || r.rows[0].host_id !== socket.user.id) return;
+    const state = roomState.get(socket.sessionCode);
+    if (!state) return;
+    state.waitingRoomEnabled = !state.waitingRoomEnabled;
+    io.to(socket.sessionCode).emit('waiting-room-state', { enabled: state.waitingRoomEnabled });
+    // Auto-approve everyone waiting when the waiting room is turned off
+    if (!state.waitingRoomEnabled && state.waitingRoom.size > 0) {
+      const sessRes = await pool.query('SELECT * FROM sessions WHERE code=$1', [socket.sessionCode]);
+      const session = sessRes.rows[0];
+      if (session) {
+        for (const sid of [...state.waitingRoom.keys()]) {
+          const target = io.sockets.sockets.get(sid);
+          if (target) await doJoin(target, session, socket.sessionCode, state);
+        }
+      }
+      state.waitingRoom.clear();
+      broadcastWaitingRoom(socket.sessionCode, state);
+    }
+  });
+
+  socket.on('waiting-room-approve', async ({ targetSocketId }) => {
+    if (!await verifyHost(socket)) return;
+    const room = socket.sessionCode;
+    const state = roomState.get(room);
+    if (!state || !state.waitingRoom.has(targetSocketId)) return;
+    state.waitingRoom.delete(targetSocketId);
+    broadcastWaitingRoom(room, state);
+    const target = io.sockets.sockets.get(targetSocketId);
+    if (!target) return;
+    const sessRes = await pool.query('SELECT * FROM sessions WHERE code=$1', [room]);
+    const session = sessRes.rows[0];
+    if (session) await doJoin(target, session, room, state);
+  });
+
+  socket.on('waiting-room-deny', async ({ targetSocketId }) => {
+    if (!await verifyHost(socket)) return;
+    const state = roomState.get(socket.sessionCode);
+    if (!state) return;
+    state.waitingRoom.delete(targetSocketId);
+    broadcastWaitingRoom(socket.sessionCode, state);
+    const target = io.sockets.sockets.get(targetSocketId);
+    if (target) target.emit('join-denied');
+  });
+
   socket.on('disconnect', () => {
+    // Clean up from waiting room if they disconnected while waiting
+    if (socket.pendingRoom && !socket.sessionCode) {
+      const state = roomState.get(socket.pendingRoom);
+      if (state) {
+        state.waitingRoom.delete(socket.id);
+        broadcastWaitingRoom(socket.pendingRoom, state);
+      }
+    }
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
     if (!state) return;
