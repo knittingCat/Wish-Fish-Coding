@@ -368,10 +368,12 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: 0.85rem; flex-shrink: 0; color: #fff;
 }
-.p-name { font-size: 0.88rem; font-weight: 600; flex: 1; min-width: 0; }
-.p-host     { font-size: 0.68rem; color: var(--warn);  margin-left: 6px; font-weight: 700; }
-.p-suspended{ font-size: 0.68rem; color: var(--txt3);  margin-left: 6px; font-weight: 700; }
-.p-flagged  { font-size: 0.68rem; color: var(--err);   margin-left: 6px; font-weight: 700; }
+.p-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.p-name { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.p-host     { font-size: 0.68rem; color: var(--warn);  font-weight: 700; }
+.p-suspended{ font-size: 0.68rem; color: var(--txt3);  font-weight: 700; }
+.p-flagged  { font-size: 0.68rem; color: var(--err);   font-weight: 700; }
 
 /* Waiting room section */
 .waiting-section { border-bottom: 1px solid var(--border); padding: 10px 12px; background: rgba(74,159,213,.06); }

@@ -900,7 +900,10 @@
         </div>` : '';
       return `<div class="participant">
         <div class="avatar">${initial}</div>
-        <div class="p-name">${esc(p.username)}${hostTag}${suspTag}${flagTag}</div>
+        <div class="p-info">
+          <div class="p-name">${esc(p.username)}</div>
+          ${(hostTag || suspTag || flagTag) ? `<div class="p-tags">${hostTag}${suspTag}${flagTag}</div>` : ''}
+        </div>
         ${menuHtml}
       </div>`;
     }).join('');
@@ -925,7 +928,7 @@
   function flagUser(socketId) {
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
     const p = lastParticipants.find(p => p.socketId === socketId);
-    if (!confirm(`Flag ${p?.username || 'this user'} for review?`)) return;
+    if (!confirm(`Flag ${p?.username || 'this user'}?`)) return;
     socket.emit('flag-user', { targetSocketId: socketId });
   }
   function hostRemove(socketId, username) {
