@@ -809,7 +809,7 @@
       const isSelf  = p.socketId === socket?.id;
       const canAct  = !isSelf;
       const flagItem = !p.flagged
-        ? `<button class="p-menu-item p-menu-danger" onclick="flagUser('${p.socketId}')">Flag ${esc(p.username)}</button>`
+        ? `<button class="p-menu-item" onclick="flagUser('${p.socketId}')">Flag ${esc(p.username)}</button>`
         : '';
       const hostItems = isHost ? `
             <button class="p-menu-item" onclick="transferHost('${p.socketId}','${esc(p.username)}')">Make ${esc(p.username)} the Host</button>
