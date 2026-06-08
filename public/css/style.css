@@ -575,6 +575,8 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .p-menu-dropdown { background: var(--bg1); border-color: #2a3550; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
   .p-menu-item { color: var(--txt1); }
   .p-menu-item:hover { background: var(--bg3); }
+  .p-menu-danger { color: var(--err); }
+  .p-menu-danger:hover { background: rgba(229,62,62,.07); }
 
   .gate-card { background: var(--bg1); border-color: #2a3550; }
 
