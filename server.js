@@ -394,7 +394,7 @@ io.on('connection', (socket) => {
     );
     if (banRow.rows.length) {
       const msg = banRow.rows[0].reason === 'denied'
-        ? 'Your request to join this session was denied.'
+        ? 'Your request to join this session was denied and you cannot rejoin.'
         : 'You have been removed from this session and cannot rejoin.';
       socket.emit('join-rejected', { message: msg });
       return;
