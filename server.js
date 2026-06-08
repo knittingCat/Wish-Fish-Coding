@@ -86,6 +86,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_30m_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_5m_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_now_sent INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE session_bans ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT 'removed'`);
   console.log('Database ready');
 }
 
@@ -388,11 +389,14 @@ io.on('connection', (socket) => {
     if (!session) { socket.emit('error', { message: 'Session not found' }); return; }
 
     const banRow = await pool.query(
-      'SELECT 1 FROM session_bans WHERE session_id=$1 AND user_id=$2',
+      'SELECT reason FROM session_bans WHERE session_id=$1 AND user_id=$2',
       [session.id, socket.user.id]
     );
     if (banRow.rows.length) {
-      socket.emit('join-rejected', { message: 'You have been removed from this session and cannot rejoin.' });
+      const msg = banRow.rows[0].reason === 'denied'
+        ? 'Your request to join this session was denied.'
+        : 'You have been removed from this session and cannot rejoin.';
+      socket.emit('join-rejected', { message: msg });
       return;
     }
 
@@ -620,8 +624,8 @@ io.on('connection', (socket) => {
     broadcastWaitingRoom(socket.sessionCode, state);
     if (waiting?.userId) {
       await pool.query(
-        'INSERT INTO session_bans (session_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-        [socket.sessionDbId, waiting.userId]
+        'INSERT INTO session_bans (session_id, user_id, reason) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [socket.sessionDbId, waiting.userId, 'denied']
       );
     }
     const target = io.sockets.sockets.get(targetSocketId);
