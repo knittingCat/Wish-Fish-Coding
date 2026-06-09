@@ -51,6 +51,10 @@
   <!-- Contacts panel -->
   <div id="contactsPanel" style="display:none">
     <div id="contactListView">
+      <div class="contact-search-row">
+        <input type="text" id="contactUsernameInput" placeholder="Enter a username…" maxlength="40" autocomplete="off">
+        <button class="btn btn-primary btn-sm" onclick="sendRequestByUsername()">Send Request</button>
+      </div>
       <div id="pendingSection" style="display:none">
         <div class="contacts-section-label">Pending Requests</div>
         <div id="pendingList"></div>
@@ -473,6 +477,22 @@
   // ── Contacts ───────────────────────────────────────────────────────────────
   let activeChatId = null;
   const ME_ID = null; // resolved from token after load
+
+  async function sendRequestByUsername() {
+    const input = document.getElementById('contactUsernameInput');
+    const username = input.value.trim();
+    if (!username) return;
+    try {
+      await API.post('/api/contacts', { targetUsername: username });
+      input.value = '';
+      toast(`Contact request sent to ${username}!`, 'ok');
+      loadContacts();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  document.getElementById('contactUsernameInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendRequestByUsername();
+  });
 
   async function loadContacts() {
     try {

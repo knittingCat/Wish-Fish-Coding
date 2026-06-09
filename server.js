@@ -78,6 +78,21 @@ async function initDb() {
       banned_at  TIMESTAMP DEFAULT NOW(),
       PRIMARY KEY (session_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS contacts (
+      id SERIAL PRIMARY KEY,
+      requester_id INTEGER NOT NULL REFERENCES users(id),
+      addressee_id INTEGER NOT NULL REFERENCES users(id),
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(requester_id, addressee_id)
+    );
+    CREATE TABLE IF NOT EXISTS contact_messages (
+      id SERIAL PRIMARY KEY,
+      contact_id INTEGER NOT NULL REFERENCES contacts(id),
+      sender_id  INTEGER NOT NULL REFERENCES users(id),
+      content    TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
   `);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_flagged BOOLEAN DEFAULT FALSE`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS reminder_options TEXT DEFAULT '["1h","15m"]'`);
@@ -87,6 +102,8 @@ async function initDb() {
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_5m_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_now_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE session_bans ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT 'removed'`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS requester_last_read TIMESTAMP`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS addressee_last_read TIMESTAMP`);
   console.log('Database ready');
 }
 
@@ -342,6 +359,161 @@ app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => 
   res.json({ success: true });
 });
 
+// ── Contacts ──────────────────────────────────────────────────────────────────
+
+app.post('/api/contacts', authMiddleware, async (req, res) => {
+  let { targetUserId, targetUsername } = req.body || {};
+  if (!targetUserId && targetUsername) {
+    const u = await pool.query('SELECT id FROM users WHERE LOWER(username)=LOWER($1)', [targetUsername]);
+    if (!u.rows.length) return res.status(404).json({ error: `No user found with username "${targetUsername}"` });
+    targetUserId = u.rows[0].id;
+  }
+  if (!targetUserId) return res.status(400).json({ error: 'targetUserId or targetUsername required' });
+  if (targetUserId === req.user.id) return res.status(400).json({ error: 'Cannot add yourself' });
+  try {
+    const existing = await pool.query(
+      'SELECT id, status FROM contacts WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)',
+      [req.user.id, targetUserId]
+    );
+    if (existing.rows.length) {
+      const s = existing.rows[0].status;
+      return res.status(409).json({ error: s === 'accepted' ? 'Already contacts' : 'Request already sent' });
+    }
+    const result = await pool.query(
+      'INSERT INTO contacts (requester_id, addressee_id) VALUES ($1,$2) RETURNING id',
+      [req.user.id, targetUserId]
+    );
+    const senderRes = await pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]);
+    io.to(`user-${targetUserId}`).emit('contact-request-received', {
+      contactId: result.rows[0].id,
+      from: { id: req.user.id, username: senderRes.rows[0]?.username }
+    });
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: 'Failed to send request' }); }
+});
+
+app.get('/api/contacts/notifications', authMiddleware, async (req, res) => {
+  const uid = req.user.id;
+  const pend = await pool.query(`SELECT COUNT(*) FROM contacts WHERE addressee_id=$1 AND status='pending'`, [uid]);
+  const cons = await pool.query(
+    `SELECT id, requester_id, requester_last_read, addressee_last_read FROM contacts WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+    [uid]
+  );
+  let unread = 0;
+  for (const c of cons.rows) {
+    const since = c.requester_id === uid ? c.requester_last_read : c.addressee_last_read;
+    const r = await pool.query(
+      `SELECT COUNT(*) FROM contact_messages WHERE contact_id=$1 AND sender_id!=$2 AND created_at > $3`,
+      [c.id, uid, since || new Date(0)]
+    );
+    unread += parseInt(r.rows[0].count);
+  }
+  res.json({ pendingRequests: parseInt(pend.rows[0].count), unreadMessages: unread });
+});
+
+app.get('/api/contacts', authMiddleware, async (req, res) => {
+  const uid = req.user.id;
+  const rows = await pool.query(`
+    SELECT c.id, c.status, c.created_at, c.requester_id, c.addressee_id,
+      c.requester_last_read, c.addressee_last_read,
+      u_r.username AS requester_username, u_a.username AS addressee_username
+    FROM contacts c
+    JOIN users u_r ON u_r.id=c.requester_id
+    JOIN users u_a ON u_a.id=c.addressee_id
+    WHERE c.requester_id=$1 OR c.addressee_id=$1
+    ORDER BY c.created_at DESC
+  `, [uid]);
+  const result = await Promise.all(rows.rows.map(async c => {
+    const isReq = c.requester_id === uid;
+    const lastRead = isReq ? c.requester_last_read : c.addressee_last_read;
+    const lastMsg = await pool.query(
+      `SELECT content, created_at, sender_id FROM contact_messages WHERE contact_id=$1 ORDER BY created_at DESC LIMIT 1`,
+      [c.id]
+    );
+    const unread = c.status === 'accepted' ? await pool.query(
+      `SELECT COUNT(*) FROM contact_messages WHERE contact_id=$1 AND sender_id!=$2 AND created_at>$3`,
+      [c.id, uid, lastRead || new Date(0)]
+    ) : { rows: [{ count: '0' }] };
+    return {
+      id: c.id, status: c.status, isRequester: isReq,
+      otherId: isReq ? c.addressee_id : c.requester_id,
+      otherUsername: isReq ? c.addressee_username : c.requester_username,
+      lastMessage: lastMsg.rows[0]?.content || null,
+      lastMessageAt: lastMsg.rows[0]?.created_at || null,
+      unreadCount: parseInt(unread.rows[0].count)
+    };
+  }));
+  res.json(result);
+});
+
+app.post('/api/contacts/:id/accept', authMiddleware, async (req, res) => {
+  const r = await pool.query(
+    `UPDATE contacts SET status='accepted' WHERE id=$1 AND addressee_id=$2 AND status='pending' RETURNING requester_id`,
+    [req.params.id, req.user.id]
+  );
+  if (!r.rows.length) return res.status(404).json({ error: 'Request not found' });
+  const me = await pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]);
+  io.to(`user-${r.rows[0].requester_id}`).emit('contact-request-accepted', {
+    contactId: parseInt(req.params.id),
+    by: { id: req.user.id, username: me.rows[0]?.username }
+  });
+  res.json({ success: true });
+});
+
+app.post('/api/contacts/:id/decline', authMiddleware, async (req, res) => {
+  await pool.query(
+    `DELETE FROM contacts WHERE id=$1 AND addressee_id=$2 AND status='pending'`,
+    [req.params.id, req.user.id]
+  );
+  res.json({ success: true });
+});
+
+app.get('/api/contacts/:id/messages', authMiddleware, async (req, res) => {
+  const uid = req.user.id;
+  const contact = await pool.query(
+    `SELECT * FROM contacts WHERE id=$1 AND (requester_id=$2 OR addressee_id=$2) AND status='accepted'`,
+    [req.params.id, uid]
+  );
+  if (!contact.rows.length) return res.status(404).json({ error: 'Contact not found' });
+  const msgs = await pool.query(
+    `SELECT m.id, m.content, m.created_at, m.sender_id, u.username AS sender_username
+     FROM contact_messages m JOIN users u ON u.id=m.sender_id
+     WHERE m.contact_id=$1 ORDER BY m.created_at ASC LIMIT 200`,
+    [req.params.id]
+  );
+  const c = contact.rows[0];
+  const col = c.requester_id === uid ? 'requester_last_read' : 'addressee_last_read';
+  await pool.query(`UPDATE contacts SET ${col}=NOW() WHERE id=$1`, [req.params.id]);
+  res.json(msgs.rows);
+});
+
+app.post('/api/contacts/:id/messages', authMiddleware, async (req, res) => {
+  const { content } = req.body || {};
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+  const uid = req.user.id;
+  const contact = await pool.query(
+    `SELECT * FROM contacts WHERE id=$1 AND (requester_id=$2 OR addressee_id=$2) AND status='accepted'`,
+    [req.params.id, uid]
+  );
+  if (!contact.rows.length) return res.status(404).json({ error: 'Contact not found' });
+  const c = contact.rows[0];
+  const r = await pool.query(
+    `INSERT INTO contact_messages (contact_id, sender_id, content) VALUES ($1,$2,$3) RETURNING *`,
+    [req.params.id, uid, content.trim()]
+  );
+  const col = c.requester_id === uid ? 'requester_last_read' : 'addressee_last_read';
+  await pool.query(`UPDATE contacts SET ${col}=NOW() WHERE id=$1`, [req.params.id]);
+  const me = await pool.query('SELECT username FROM users WHERE id=$1', [uid]);
+  const msgData = {
+    contactId: parseInt(req.params.id),
+    message: { id: r.rows[0].id, content: r.rows[0].content, created_at: r.rows[0].created_at, sender_id: uid, sender_username: me.rows[0]?.username }
+  };
+  const otherId = c.requester_id === uid ? c.addressee_id : c.requester_id;
+  io.to(`user-${otherId}`).emit('new-contact-message', msgData);
+  io.to(`user-${uid}`).emit('new-contact-message', msgData);
+  res.json({ success: true, message: r.rows[0] });
+});
+
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const roomState = new Map();
 
@@ -382,6 +554,8 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
+  socket.join(`user-${socket.user.id}`);
+
   socket.on('join-session', async ({ code }) => {
     const room = code.toUpperCase();
     const result = await pool.query('SELECT * FROM sessions WHERE code=$1', [room]);
