@@ -28,10 +28,16 @@
     <button class="top-tab-btn" data-tab="contacts" onclick="switchTab('contacts', this)">Contacts <span class="tab-notif" id="contactsTabBadge" style="display:none">0</span></button>
   </div>
 
-  <!-- Join bar -->
+  <!-- Join bar (sessions) -->
   <div class="join-bar" id="joinBar">
     <input type="text" id="joinCode" placeholder="Enter session code (e.g. FEGH694)" maxlength="7">
     <button class="btn btn-primary" onclick="joinSession()">Join Session</button>
+  </div>
+
+  <!-- Contact search bar (contacts) -->
+  <div class="join-bar" id="contactSearchBar" style="display:none">
+    <input type="text" id="contactUsernameInput" placeholder="Enter a username to send a contact request…" maxlength="40" autocomplete="off">
+    <button class="btn btn-primary" onclick="sendRequestByUsername()">Send Request</button>
   </div>
 
   <!-- Session filter tabs -->
@@ -51,10 +57,6 @@
   <!-- Contacts panel -->
   <div id="contactsPanel" style="display:none">
     <div id="contactListView">
-      <div class="contact-search-row">
-        <input type="text" id="contactUsernameInput" placeholder="Enter a username…" maxlength="40" autocomplete="off">
-        <button class="btn btn-primary btn-sm" onclick="sendRequestByUsername()">Send Request</button>
-      </div>
       <div id="pendingSection" style="display:none">
         <div class="contacts-section-label">Pending Requests</div>
         <div id="pendingList"></div>
@@ -276,7 +278,8 @@
     document.querySelectorAll('.top-tab-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
     const isContacts = tab === 'contacts';
-    document.getElementById('joinBar').style.display          = isContacts ? 'none' : '';
+    document.getElementById('joinBar').style.display           = isContacts ? 'none' : '';
+    document.getElementById('contactSearchBar').style.display  = isContacts ? '' : 'none';
     document.getElementById('sessionFilterTabs').style.display = isContacts ? 'none' : '';
     document.getElementById('sessionsHeader').style.display   = isContacts ? 'none' : '';
     document.getElementById('sessionsGrid').style.display     = isContacts ? 'none' : '';
