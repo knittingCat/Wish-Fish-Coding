@@ -14,6 +14,7 @@
   <a href="/dashboard" class="brand"><span class="fish">🐟</span> <span>Wish Fish Coding</span></a>
   <div class="nav-right">
     <span class="nav-user" id="navUser"></span>
+    <a href="/dashboard" class="nav-notif-btn" id="navNotifBtn" style="display:none" title="Contacts &amp; Messages"><span id="navNotifCount">0</span></a>
     <button class="btn btn-ghost btn-sm" onclick="leaveSession()">Leave</button>
   </div>
 </nav>
@@ -537,6 +538,10 @@
       renderWaitingRoom(waiting);
     });
 
+    socket.on('contact-request-received', () => { loadNotifBadge(); });
+    socket.on('contact-request-accepted', () => { loadNotifBadge(); });
+    socket.on('new-contact-message',      () => { loadNotifBadge(); });
+
     socket.on('waiting-room-state', ({ enabled }) => {
       waitingRoomEnabled = enabled;
       updateWaitingRoomBtn();
@@ -890,12 +895,14 @@
             <button class="p-menu-item" onclick="transferHost('${p.socketId}','${esc(p.username)}')">Make ${esc(p.username)} the Host</button>
             <button class="p-menu-item" onclick="hostSuspend('${p.socketId}')">${p.suspended ? 'Unsuspend' : 'Suspend'} ${esc(p.username)}'s Activities</button>
             <button class="p-menu-item p-menu-danger" onclick="hostRemove('${p.socketId}','${esc(p.username)}')">Remove ${esc(p.username)} From Session</button>` : '';
-      const menuHtml = canAct && (flagItem || hostItems) ? `
+      const contactItem = `<button class="p-menu-item" onclick="sendContactRequest(${p.userId},'${esc(p.username)}')">Send ${esc(p.username)} a Contact Request</button>`;
+      const menuHtml = canAct && (contactItem || flagItem || hostItems) ? `
         <div class="p-menu-wrap">
           <button class="p-menu-btn" onclick="togglePMenu(event,'${p.socketId}')">···</button>
           <div class="p-menu-dropdown" id="pmenu-${p.socketId}">
             ${hostItems}
             ${flagItem}
+            ${contactItem}
           </div>
         </div>` : '';
       return `<div class="participant">
@@ -935,6 +942,16 @@
     document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
     if (!confirm(`Remove ${username} from the session?`)) return;
     socket.emit('host-remove', { targetSocketId: socketId });
+  }
+
+  async function sendContactRequest(userId, username) {
+    document.querySelectorAll('.p-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+    try {
+      await API.post('/api/contacts', { targetUserId: userId });
+      toast(`Contact request sent to ${username}!`, 'ok');
+    } catch (err) {
+      toast(err.message, 'err');
+    }
   }
 
   function transferHost(socketId, username) {
@@ -1054,6 +1071,7 @@
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  loadNotifBadge();
   init();
 </script>
 </body>

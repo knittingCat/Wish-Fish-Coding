@@ -1,3 +1,5 @@
 node_modules/
 wishfish.db
+wishfish.db-shm
+wishfish.db-wal
 .env

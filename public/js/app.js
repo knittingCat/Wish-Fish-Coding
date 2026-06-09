@@ -61,6 +61,20 @@ function toast(msg, type = '') {
   _toastTimer = setTimeout(() => { el.className = 'toast'; }, 3500);
 }
 
+// Contacts notification badge
+async function loadNotifBadge() {
+  if (!getToken()) return;
+  try {
+    const d = await API.get('/api/contacts/notifications');
+    const total = d.pendingRequests + d.unreadMessages;
+    const btn = document.getElementById('navNotifBtn');
+    const count = document.getElementById('navNotifCount');
+    if (!btn || !count) return;
+    count.textContent = total;
+    btn.style.display = total > 0 ? '' : 'none';
+  } catch {}
+}
+
 // Format timestamp
 function fmtTime(iso) {
   const d = new Date(iso);
