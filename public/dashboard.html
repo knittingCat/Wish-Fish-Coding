@@ -21,22 +21,28 @@
 
 <!-- Main -->
 <div class="dash-wrap">
-  <div class="page-title">My Sessions</div>
+
+  <!-- Top-level tabs -->
+  <div class="top-tab-row">
+    <button class="top-tab-btn active" onclick="switchTab('sessions', this)">Sessions</button>
+    <button class="top-tab-btn" data-tab="contacts" onclick="switchTab('contacts', this)">Contacts <span class="tab-notif" id="contactsTabBadge" style="display:none">0</span></button>
+  </div>
 
   <!-- Join bar -->
-  <div class="join-bar">
+  <div class="join-bar" id="joinBar">
     <input type="text" id="joinCode" placeholder="Enter session code (e.g. FEGH694)" maxlength="7">
     <button class="btn btn-primary" onclick="joinSession()">Join Session</button>
   </div>
 
-  <!-- Tabs -->
-  <div class="tab-row">
-    <button class="tab-btn active" onclick="switchTab('sessions', this)">Sessions</button>
-    <button class="tab-btn" data-tab="contacts" onclick="switchTab('contacts', this)">Contacts <span class="tab-notif" id="contactsTabBadge" style="display:none">0</span></button>
+  <!-- Session filter tabs -->
+  <div class="tab-row" id="sessionFilterTabs">
+    <button class="tab-btn active" onclick="filterSessions('all', this)">All Sessions</button>
+    <button class="tab-btn" onclick="filterSessions('live', this)">Live</button>
+    <button class="tab-btn" onclick="filterSessions('scheduled', this)">Scheduled</button>
   </div>
 
   <div class="section-header" id="sessionsHeader">
-    <span class="section-title">Sessions</span>
+    <span class="section-title" id="listLabel">All</span>
     <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Session</button>
   </div>
 
@@ -185,6 +191,7 @@
 
   let allSessions = [];
   let currentTab = 'sessions';
+  let sessionFilter = 'all';
   let inviteTarget = null;
   let deleteTarget = null;
   let tagController = null;
@@ -200,9 +207,20 @@
     }
   }
 
+  function filterSessions(filter, el) {
+    sessionFilter = filter;
+    document.querySelectorAll('#sessionFilterTabs .tab-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('listLabel').textContent =
+      filter === 'all' ? 'All' : filter === 'live' ? 'Live' : 'Scheduled';
+    renderSessions();
+  }
+
   function renderSessions() {
     const grid = document.getElementById('sessionsGrid');
-    const list = allSessions;
+    let list = allSessions;
+    if (sessionFilter === 'live')      list = list.filter(s => s.is_active && (!s.is_scheduled || new Date(s.scheduled_time) <= new Date()));
+    if (sessionFilter === 'scheduled') list = list.filter(s => s.is_scheduled && new Date(s.scheduled_time) > new Date());
 
     if (!list.length) {
       grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
@@ -248,12 +266,14 @@
 
   function switchTab(tab, el) {
     currentTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.top-tab-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
     const isContacts = tab === 'contacts';
-    document.getElementById('sessionsHeader').style.display = isContacts ? 'none' : '';
-    document.getElementById('sessionsGrid').style.display   = isContacts ? 'none' : '';
-    document.getElementById('contactsPanel').style.display  = isContacts ? '' : 'none';
+    document.getElementById('joinBar').style.display          = isContacts ? 'none' : '';
+    document.getElementById('sessionFilterTabs').style.display = isContacts ? 'none' : '';
+    document.getElementById('sessionsHeader').style.display   = isContacts ? 'none' : '';
+    document.getElementById('sessionsGrid').style.display     = isContacts ? 'none' : '';
+    document.getElementById('contactsPanel').style.display    = isContacts ? '' : 'none';
     if (isContacts) { loadContacts(); return; }
     loadSessions();
   }
