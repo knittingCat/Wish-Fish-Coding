@@ -848,7 +848,7 @@
     div.innerHTML = `
       <div class="msg-meta">
         <span class="msg-user${isMe ? ' me' : ''}">${esc(username)}</span>
-        <span class="msg-time">${fmtTime(timestamp)}</span>
+        <span class="msg-time">${fmtChatTime(timestamp)}</span>
       </div>
       <div class="msg-body">${esc(content)}</div>`;
     el.appendChild(div);
