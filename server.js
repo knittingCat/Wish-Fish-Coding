@@ -185,6 +185,36 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, t
 </body></html>`;
 }
 
+function contactEmailHtml(type, fromUsername) {
+  const isRequest = type === 'request';
+  const heading   = isRequest
+    ? `${fromUsername} sent you a contact request`
+    : `${fromUsername} accepted your contact request!`;
+  const body = isRequest
+    ? `<p style="color:#555;margin-bottom:24px">${fromUsername} wants to connect with you on Wish Fish Coding. Log in to accept or decline.</p>`
+    : `<p style="color:#555;margin-bottom:24px">You and ${fromUsername} are now contacts on Wish Fish Coding. Open your dashboard to start chatting.</p>`;
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  .wrap { font-family:Arial,sans-serif; background:#ffffff; color:#1a1a2e; padding:36px; border-radius:12px; max-width:480px; margin:auto; border:1px solid #d0d8e8; }
+  .btn { display:inline-block; background:linear-gradient(135deg,#1e90ff,#0070dd); color:white !important; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:600; }
+  @media (prefers-color-scheme: dark) {
+    .wrap { background:#161b27 !important; color:#e8f0ff !important; border-color:#2a3550 !important; }
+  }
+</style>
+</head><body style="margin:0;padding:16px;background:#f0f4f8">
+<div class="wrap">
+  <div style="margin-bottom:24px">
+    <span style="font-size:22px;vertical-align:middle">🐟</span>
+    <strong style="font-size:1.1rem;margin-left:8px">Wish Fish Coding</strong>
+  </div>
+  <h2 style="margin-bottom:16px">${heading}</h2>
+  ${body}
+  <a class="btn" href="${process.env.APP_URL || 'https://wish-fish-coding.onrender.com'}/dashboard?tab=contacts">Open Contacts</a>
+</div>
+</body></html>`;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function genCode() {
   const L = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -383,11 +413,18 @@ app.post('/api/contacts', authMiddleware, async (req, res) => {
       'INSERT INTO contacts (requester_id, addressee_id) VALUES ($1,$2) RETURNING id',
       [req.user.id, targetUserId]
     );
-    const senderRes = await pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]);
+    const [senderRes, addresseeRes] = await Promise.all([
+      pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]),
+      pool.query('SELECT email FROM users WHERE id=$1', [targetUserId])
+    ]);
+    const senderUsername = senderRes.rows[0]?.username;
     io.to(`user-${targetUserId}`).emit('contact-request-received', {
       contactId: result.rows[0].id,
-      from: { id: req.user.id, username: senderRes.rows[0]?.username }
+      from: { id: req.user.id, username: senderUsername }
     });
+    if (addresseeRes.rows[0]?.email) {
+      sendEmail(addresseeRes.rows[0].email, `${senderUsername} sent you a contact request`, contactEmailHtml('request', senderUsername));
+    }
     res.json({ success: true });
   } catch { res.status(500).json({ error: 'Failed to send request' }); }
 });
@@ -452,11 +489,18 @@ app.post('/api/contacts/:id/accept', authMiddleware, async (req, res) => {
     [req.params.id, req.user.id]
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Request not found' });
-  const me = await pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]);
+  const [me, requesterRes] = await Promise.all([
+    pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]),
+    pool.query('SELECT email FROM users WHERE id=$1', [r.rows[0].requester_id])
+  ]);
+  const acceptorUsername = me.rows[0]?.username;
   io.to(`user-${r.rows[0].requester_id}`).emit('contact-request-accepted', {
     contactId: parseInt(req.params.id),
-    by: { id: req.user.id, username: me.rows[0]?.username }
+    by: { id: req.user.id, username: acceptorUsername }
   });
+  if (requesterRes.rows[0]?.email) {
+    sendEmail(requesterRes.rows[0].email, `${acceptorUsername} accepted your contact request!`, contactEmailHtml('accepted', acceptorUsername));
+  }
   res.json({ success: true });
 });
 
