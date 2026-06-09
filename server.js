@@ -140,6 +140,28 @@ async function sendEmail(to, subject, html) {
   }
 }
 
+function emailShell(extraStyles, content) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  .wrap { font-family:Arial,sans-serif; background:#ffffff; color:#1a1a2e; padding:36px; border-radius:12px; max-width:480px; margin:auto; border:1px solid #d0d8e8; }
+  .btn { display:inline-block; background:linear-gradient(135deg,#1e90ff,#0070dd); color:white !important; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:600; }
+  @media (prefers-color-scheme: dark) {
+    .wrap { background:#161b27 !important; color:#e8f0ff !important; border-color:#2a3550 !important; }
+  }
+  ${extraStyles}
+</style>
+</head><body style="margin:0;padding:16px;background:#f0f4f8">
+<div class="wrap">
+  <div style="margin-bottom:24px">
+    <span style="font-size:22px;vertical-align:middle;position:relative;top:-1px">🐟</span>
+    <span style="font-size:1.4rem;font-weight:800;vertical-align:middle;margin-left:10px">Wish Fish Coding</span>
+  </div>
+  ${content}
+</div>
+</body></html>`;
+}
+
 function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, timezone) {
   const tz = timezone || 'UTC';
   const schedLine = scheduledTime
@@ -148,71 +170,39 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, t
   const heading = isReminder
     ? `Reminder: "${title}" starts ${reminderText}`
     : `You're invited to "${title}"`;
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<style>
-  .wrap { font-family:Arial,sans-serif; background:#ffffff; color:#1a1a2e; padding:36px; border-radius:12px; max-width:480px; margin:auto; border:1px solid #d0d8e8; }
+  return emailShell(`
   .heading { color:#1a1a2e; margin-bottom:12px; }
   .sched { color:#555; }
   .sched strong { color:#1a1a2e; }
   .label { color:#555; margin-bottom:20px; }
   .code-box { background:#f0f4fa; border:1px solid #b0c4de; border-radius:10px; padding:20px; text-align:center; margin-bottom:24px; }
   .code { font-family:'Courier New',monospace; font-size:2.2rem; font-weight:900; color:#1e90ff; letter-spacing:4px; }
-  .btn { display:inline-block; background:linear-gradient(135deg,#1e90ff,#0070dd); color:white !important; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:600; }
   @media (prefers-color-scheme: dark) {
-    .wrap { background:#161b27 !important; color:#e8f0ff !important; border-color:#2a3550 !important; }
     .heading { color:#e8f0ff !important; }
     .sched { color:#7a9cc8 !important; }
     .sched strong { color:#e8f0ff !important; }
     .label { color:#7a9cc8 !important; }
     .code-box { background:#1a2035 !important; border-color:#2a3550 !important; }
-  }
-</style>
-</head><body style="margin:0;padding:16px;background:#f0f4f8">
-<div class="wrap">
-  <div style="margin-bottom:24px">
-    <span style="font-size:22px;vertical-align:middle;position:relative;top:-1px">🐟</span>
-    <span style="font-size:1.4rem;font-weight:800;vertical-align:middle;margin-left:10px">Wish Fish Coding</span>
-  </div>
+  }`, `
   <h2 class="heading">${heading}</h2>
   ${schedLine}
   <p class="label">Session code:</p>
-  <div class="code-box">
-    <span class="code">${code}</span>
-  </div>
-  <a href="${APP_URL}/session?code=${code}" class="btn">Join Session</a>
-</div>
-</body></html>`;
+  <div class="code-box"><span class="code">${code}</span></div>
+  <a href="${APP_URL}/session?code=${code}" class="btn">Join Session</a>`);
 }
 
 function contactEmailHtml(type, fromUsername) {
   const isRequest = type === 'request';
-  const heading   = isRequest
+  const heading = isRequest
     ? `${fromUsername} sent you a contact request`
     : `${fromUsername} accepted your contact request!`;
   const body = isRequest
     ? `<p style="color:#555;margin-bottom:24px">${fromUsername} wants to connect with you on Wish Fish Coding. Log in to accept or decline.</p>`
     : `<p style="color:#555;margin-bottom:24px">You and ${fromUsername} are now contacts on Wish Fish Coding. Open your dashboard to start chatting.</p>`;
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<style>
-  .wrap { font-family:Arial,sans-serif; background:#ffffff; color:#1a1a2e; padding:36px; border-radius:12px; max-width:480px; margin:auto; border:1px solid #d0d8e8; }
-  .btn { display:inline-block; background:linear-gradient(135deg,#1e90ff,#0070dd); color:white !important; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:600; }
-  @media (prefers-color-scheme: dark) {
-    .wrap { background:#161b27 !important; color:#e8f0ff !important; border-color:#2a3550 !important; }
-  }
-</style>
-</head><body style="margin:0;padding:16px;background:#f0f4f8">
-<div class="wrap">
-  <div style="margin-bottom:24px">
-    <span style="font-size:22px;vertical-align:middle">🐟</span>
-    <strong style="font-size:1.1rem;margin-left:8px">Wish Fish Coding</strong>
-  </div>
+  return emailShell('', `
   <h2 style="margin-bottom:16px">${heading}</h2>
   ${body}
-  <a class="btn" href="${process.env.APP_URL || 'https://wish-fish-coding.onrender.com'}/dashboard?tab=contacts">Open Contacts</a>
-</div>
-</body></html>`;
+  <a class="btn" href="${APP_URL}/dashboard?tab=contacts">Open Contacts</a>`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
