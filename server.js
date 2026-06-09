@@ -503,10 +503,27 @@ app.post('/api/contacts/:id/decline', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/contacts/:id/cancel', authMiddleware, async (req, res) => {
-  await pool.query(
-    `DELETE FROM contacts WHERE id=$1 AND requester_id=$2 AND status='pending'`,
+  const contact = await pool.query(
+    `DELETE FROM contacts WHERE id=$1 AND requester_id=$2 AND status='pending' RETURNING addressee_id`,
     [req.params.id, req.user.id]
   );
+  if (contact.rows.length) {
+    const [senderRes, addresseeRes] = await Promise.all([
+      pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]),
+      pool.query('SELECT email FROM users WHERE id=$1', [contact.rows[0].addressee_id])
+    ]);
+    const senderUsername = senderRes.rows[0]?.username;
+    if (addresseeRes.rows[0]?.email) {
+      sendEmail(
+        addresseeRes.rows[0].email,
+        `${senderUsername} cancelled their contact request`,
+        emailShell('', `
+          <h2 style="margin-bottom:16px">${senderUsername} cancelled their contact request</h2>
+          <p style="color:#555;margin-bottom:24px">${senderUsername} has withdrawn their contact request on Wish Fish Coding.</p>
+          <a class="btn" href="${APP_URL}/dashboard?tab=contacts">Open Contacts</a>`)
+      );
+    }
+  }
   res.json({ success: true });
 });
 
