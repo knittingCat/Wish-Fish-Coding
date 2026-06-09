@@ -530,9 +530,11 @@
     const outList = document.getElementById('outgoingList');
     outSec.style.display = outgoing.length ? '' : 'none';
     outList.innerHTML = outgoing.map(c => `
-      <div class="contact-card contact-card-pending">
+      <div class="contact-card">
         <div class="contact-card-name">${esc(c.otherUsername)}</div>
-        <div class="contact-last-msg">Request pending…</div>
+        <div class="contact-card-actions">
+          <button class="btn btn-secondary btn-sm" onclick="cancelContact(${c.id})">Cancel</button>
+        </div>
       </div>`).join('');
 
     document.getElementById('acceptedLabel').style.display = accepted.length ? '' : 'none';
@@ -557,6 +559,14 @@
   async function declineContact(id) {
     try {
       await API.post(`/api/contacts/${id}/decline`, {});
+      loadContacts();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function cancelContact(id) {
+    try {
+      await API.post(`/api/contacts/${id}/cancel`, {});
+      toast('Request cancelled.', 'ok');
       loadContacts();
     } catch (err) { toast(err.message, 'err'); }
   }

@@ -502,6 +502,14 @@ app.post('/api/contacts/:id/decline', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/contacts/:id/cancel', authMiddleware, async (req, res) => {
+  await pool.query(
+    `DELETE FROM contacts WHERE id=$1 AND requester_id=$2 AND status='pending'`,
+    [req.params.id, req.user.id]
+  );
+  res.json({ success: true });
+});
+
 app.get('/api/contacts/:id/messages', authMiddleware, async (req, res) => {
   const uid = req.user.id;
   const contact = await pool.query(
