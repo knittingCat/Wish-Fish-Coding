@@ -519,7 +519,7 @@ app.post('/api/contacts/:id/cancel', authMiddleware, async (req, res) => {
         `${senderUsername} cancelled their contact request`,
         emailShell('', `
           <h2 style="margin-bottom:16px">${senderUsername} cancelled their contact request</h2>
-          <p style="color:#555;margin-bottom:24px">${senderUsername} has withdrawn their contact request on Wish Fish Coding.</p>
+          <p style="color:#555;margin-bottom:24px">${senderUsername} has cancelled their contact request on Wish Fish Coding.</p>
           <a class="btn" href="${APP_URL}/dashboard?tab=contacts">Open Contacts</a>`)
       );
     }
