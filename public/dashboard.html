@@ -14,6 +14,7 @@
   <a href="/dashboard" class="brand"><span class="fish">🐟</span> <span>Wish Fish Coding</span></a>
   <div class="nav-right">
     <span class="nav-user" id="navUser"></span>
+    <button class="nav-notif-btn" id="navNotifBtn" style="display:none" onclick="switchTab('contacts', document.querySelector('[data-tab=contacts]'))" title="Contacts &amp; Messages"><span id="navNotifCount">0</span></button>
     <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
   </div>
 </nav>
@@ -33,14 +34,41 @@
     <button class="tab-btn active" onclick="switchTab('all', this)">All Sessions</button>
     <button class="tab-btn" onclick="switchTab('live', this)">Live</button>
     <button class="tab-btn" onclick="switchTab('scheduled', this)">Scheduled</button>
+    <button class="tab-btn" data-tab="contacts" onclick="switchTab('contacts', this)">Contacts <span class="tab-notif" id="contactsTabBadge" style="display:none">0</span></button>
   </div>
 
-  <div class="section-header">
+  <div class="section-header" id="sessionsHeader">
     <span class="section-title" id="listLabel">All</span>
     <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Session</button>
   </div>
 
   <div id="sessionsGrid" class="sessions-grid"></div>
+
+  <!-- Contacts panel -->
+  <div id="contactsPanel" style="display:none">
+    <div id="contactListView">
+      <div id="pendingSection" style="display:none">
+        <div class="contacts-section-label">Pending Requests</div>
+        <div id="pendingList"></div>
+      </div>
+      <div id="acceptedSection">
+        <div class="contacts-section-label" id="acceptedLabel" style="display:none">Contacts</div>
+        <div id="acceptedList"></div>
+        <p class="contacts-empty" id="contactsEmpty" style="display:none">No contacts yet. Send a request from a session's ··· menu.</p>
+      </div>
+    </div>
+    <div id="contactChatView" style="display:none">
+      <div class="contact-chat-head">
+        <button class="btn btn-ghost btn-sm" onclick="showContactList()">← Back</button>
+        <span class="contact-chat-name" id="chatContactName"></span>
+      </div>
+      <div class="contact-chat-msgs" id="contactChatMsgs"></div>
+      <div class="contact-chat-input-row">
+        <input type="text" id="contactMsgInput" placeholder="Message…" maxlength="500" autocomplete="off">
+        <button class="btn btn-primary btn-sm" onclick="sendContactMsg()">Send</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Create Session Modal ──────────────────────────────────────────────── -->
@@ -150,6 +178,7 @@
   </div>
 </div>
 
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="/js/app.js"></script>
 <script>
   if (!requireAuth()) void 0;
@@ -228,6 +257,11 @@
     currentTab = tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
+    const isContacts = tab === 'contacts';
+    document.getElementById('sessionsHeader').style.display = isContacts ? 'none' : '';
+    document.getElementById('sessionsGrid').style.display   = isContacts ? 'none' : '';
+    document.getElementById('contactsPanel').style.display  = isContacts ? '' : 'none';
+    if (isContacts) { loadContacts(); return; }
     renderSessions();
   }
 
@@ -420,6 +454,157 @@
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // ── Contacts ───────────────────────────────────────────────────────────────
+  let activeChatId = null;
+  const ME_ID = null; // resolved from token after load
+
+  async function loadContacts() {
+    try {
+      const contacts = await API.get('/api/contacts');
+      renderContacts(contacts);
+    } catch {}
+    updateContactsBadge();
+  }
+
+  function renderContacts(contacts) {
+    const pending  = contacts.filter(c => c.status === 'pending' && !c.isRequester);
+    const outgoing = contacts.filter(c => c.status === 'pending' && c.isRequester);
+    const accepted = contacts.filter(c => c.status === 'accepted');
+
+    const pendSec = document.getElementById('pendingSection');
+    const pendList = document.getElementById('pendingList');
+    pendSec.style.display = pending.length ? '' : 'none';
+    pendList.innerHTML = pending.map(c => `
+      <div class="contact-card" id="cc-${c.id}">
+        <div class="contact-card-name">${esc(c.otherUsername)}</div>
+        <div class="contact-card-actions">
+          <button class="btn btn-primary btn-sm" onclick="acceptContact(${c.id})">Accept</button>
+          <button class="btn btn-secondary btn-sm" onclick="declineContact(${c.id})">Decline</button>
+        </div>
+      </div>`).join('');
+
+    document.getElementById('acceptedLabel').style.display = accepted.length ? '' : 'none';
+    document.getElementById('contactsEmpty').style.display = (!accepted.length && !outgoing.length) ? '' : 'none';
+
+    const accList = document.getElementById('acceptedList');
+    accList.innerHTML = [
+      ...accepted.map(c => `
+        <div class="contact-card contact-card-link" onclick="openChat(${c.id},'${esc(c.otherUsername)}')">
+          <div class="contact-card-name">${esc(c.otherUsername)}${c.unreadCount > 0 ? `<span class="contact-unread">${c.unreadCount}</span>` : ''}</div>
+          ${c.lastMessage ? `<div class="contact-last-msg">${esc(c.lastMessage)}</div>` : ''}
+        </div>`),
+      ...outgoing.map(c => `
+        <div class="contact-card contact-card-pending">
+          <div class="contact-card-name">${esc(c.otherUsername)}</div>
+          <div class="contact-last-msg">Request pending…</div>
+        </div>`)
+    ].join('');
+  }
+
+  async function acceptContact(id) {
+    try {
+      await API.post(`/api/contacts/${id}/accept`, {});
+      toast('Contact added!', 'ok');
+      loadContacts();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function declineContact(id) {
+    try {
+      await API.post(`/api/contacts/${id}/decline`, {});
+      loadContacts();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function openChat(contactId, username) {
+    activeChatId = contactId;
+    document.getElementById('contactListView').style.display = 'none';
+    document.getElementById('contactChatView').style.display = '';
+    document.getElementById('chatContactName').textContent = username;
+    document.getElementById('contactChatMsgs').innerHTML = '';
+    try {
+      const msgs = await API.get(`/api/contacts/${contactId}/messages`);
+      msgs.forEach(m => appendContactMsg(m));
+      scrollChatToBottom();
+    } catch {}
+    updateContactsBadge();
+    document.getElementById('contactMsgInput').focus();
+  }
+
+  function showContactList() {
+    activeChatId = null;
+    document.getElementById('contactChatView').style.display = 'none';
+    document.getElementById('contactListView').style.display = '';
+    loadContacts();
+  }
+
+  function appendContactMsg(m) {
+    const el = document.getElementById('contactChatMsgs');
+    const div = document.createElement('div');
+    const isMe = m.sender_username === getUsername();
+    div.className = 'contact-msg' + (isMe ? ' contact-msg-me' : '');
+    div.innerHTML = `<div class="contact-msg-meta">${esc(m.sender_username)} · ${fmtTime(m.created_at)}</div><div class="contact-msg-body">${esc(m.content)}</div>`;
+    el.appendChild(div);
+  }
+
+  function scrollChatToBottom() {
+    const el = document.getElementById('contactChatMsgs');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  async function sendContactMsg() {
+    if (!activeChatId) return;
+    const input = document.getElementById('contactMsgInput');
+    const content = input.value.trim();
+    if (!content) return;
+    input.value = '';
+    try {
+      await API.post(`/api/contacts/${activeChatId}/messages`, { content });
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  document.getElementById('contactMsgInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendContactMsg(); }
+  });
+
+  async function updateContactsBadge() {
+    try {
+      const d = await API.get('/api/contacts/notifications');
+      const total = d.pendingRequests + d.unreadMessages;
+      const tabBadge = document.getElementById('contactsTabBadge');
+      if (tabBadge) { tabBadge.textContent = total; tabBadge.style.display = total > 0 ? '' : 'none'; }
+      loadNotifBadge();
+    } catch {}
+  }
+
+  // ── Dashboard socket for real-time contact events ──────────────────────────
+  const dashSocket = io({ auth: { token: getToken() } });
+  dashSocket.on('contact-request-received', ({ from }) => {
+    toast(`${from.username} sent you a contact request`, 'ok');
+    if (currentTab === 'contacts') loadContacts();
+    updateContactsBadge();
+  });
+  dashSocket.on('contact-request-accepted', ({ by }) => {
+    toast(`${by.username} accepted your contact request!`, 'ok');
+    if (currentTab === 'contacts') loadContacts();
+  });
+  dashSocket.on('new-contact-message', ({ contactId, message }) => {
+    if (activeChatId === contactId) {
+      appendContactMsg(message);
+      scrollChatToBottom();
+      API.get(`/api/contacts/${contactId}/messages`).catch(() => {}); // mark read
+    } else {
+      updateContactsBadge();
+      if (currentTab === 'contacts') loadContacts();
+    }
+  });
+
+  // Check for ?tab=contacts on load
+  if (new URLSearchParams(location.search).get('tab') === 'contacts') {
+    switchTab('contacts', document.querySelector('[data-tab=contacts]'));
+  }
+
+  loadNotifBadge();
   loadSessions();
 </script>
 </body>
