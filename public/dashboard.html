@@ -31,14 +31,12 @@
 
   <!-- Tabs -->
   <div class="tab-row">
-    <button class="tab-btn active" onclick="switchTab('all', this)">All Sessions</button>
-    <button class="tab-btn" onclick="switchTab('live', this)">Live</button>
-    <button class="tab-btn" onclick="switchTab('scheduled', this)">Scheduled</button>
+    <button class="tab-btn active" onclick="switchTab('sessions', this)">Sessions</button>
     <button class="tab-btn" data-tab="contacts" onclick="switchTab('contacts', this)">Contacts <span class="tab-notif" id="contactsTabBadge" style="display:none">0</span></button>
   </div>
 
   <div class="section-header" id="sessionsHeader">
-    <span class="section-title" id="listLabel">All</span>
+    <span class="section-title">Sessions</span>
     <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Session</button>
   </div>
 
@@ -186,7 +184,7 @@
   document.getElementById('navUser').textContent = getUsername() || '';
 
   let allSessions = [];
-  let currentTab = 'all';
+  let currentTab = 'sessions';
   let inviteTarget = null;
   let deleteTarget = null;
   let tagController = null;
@@ -204,12 +202,7 @@
 
   function renderSessions() {
     const grid = document.getElementById('sessionsGrid');
-    let list = allSessions;
-    if (currentTab === 'live')      list = list.filter(s => s.is_active && (!s.is_scheduled || new Date(s.scheduled_time) <= new Date()));
-    if (currentTab === 'scheduled') list = list.filter(s => s.is_scheduled && new Date(s.scheduled_time) > new Date());
-
-    document.getElementById('listLabel').textContent =
-      currentTab === 'all' ? 'All' : currentTab === 'live' ? 'Live' : 'Scheduled';
+    const list = allSessions;
 
     if (!list.length) {
       grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
@@ -262,7 +255,7 @@
     document.getElementById('sessionsGrid').style.display   = isContacts ? 'none' : '';
     document.getElementById('contactsPanel').style.display  = isContacts ? '' : 'none';
     if (isContacts) { loadContacts(); return; }
-    renderSessions();
+    loadSessions();
   }
 
   function openSession(code) {
@@ -484,7 +477,7 @@
       </div>`).join('');
 
     document.getElementById('acceptedLabel').style.display = accepted.length ? '' : 'none';
-    document.getElementById('contactsEmpty').style.display = (!accepted.length && !outgoing.length) ? '' : 'none';
+    document.getElementById('contactsEmpty').style.display = (!pending.length && !outgoing.length && !accepted.length) ? '' : 'none';
 
     const accList = document.getElementById('acceptedList');
     accList.innerHTML = [
