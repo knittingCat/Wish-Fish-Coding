@@ -58,8 +58,12 @@
   <div id="contactsPanel" style="display:none">
     <div id="contactListView">
       <div id="pendingSection" style="display:none">
-        <div class="contacts-section-label">Pending Requests</div>
+        <div class="contacts-section-label">Incoming Requests</div>
         <div id="pendingList"></div>
+      </div>
+      <div id="outgoingSection" style="display:none">
+        <div class="contacts-section-label">Sent Requests</div>
+        <div id="outgoingList"></div>
       </div>
       <div id="acceptedSection">
         <div class="contacts-section-label" id="acceptedLabel" style="display:none">Contacts</div>
@@ -522,22 +526,24 @@
         </div>
       </div>`).join('');
 
+    const outSec = document.getElementById('outgoingSection');
+    const outList = document.getElementById('outgoingList');
+    outSec.style.display = outgoing.length ? '' : 'none';
+    outList.innerHTML = outgoing.map(c => `
+      <div class="contact-card contact-card-pending">
+        <div class="contact-card-name">${esc(c.otherUsername)}</div>
+        <div class="contact-last-msg">Request pending…</div>
+      </div>`).join('');
+
     document.getElementById('acceptedLabel').style.display = accepted.length ? '' : 'none';
     document.getElementById('contactsEmpty').style.display = (!pending.length && !outgoing.length && !accepted.length) ? '' : 'none';
 
     const accList = document.getElementById('acceptedList');
-    accList.innerHTML = [
-      ...accepted.map(c => `
-        <div class="contact-card contact-card-link" onclick="openChat(${c.id},'${esc(c.otherUsername)}')">
-          <div class="contact-card-name">${esc(c.otherUsername)}${c.unreadCount > 0 ? `<span class="contact-unread">${c.unreadCount}</span>` : ''}</div>
-          ${c.lastMessage ? `<div class="contact-last-msg">${esc(c.lastMessage)}</div>` : ''}
-        </div>`),
-      ...outgoing.map(c => `
-        <div class="contact-card contact-card-pending">
-          <div class="contact-card-name">${esc(c.otherUsername)}</div>
-          <div class="contact-last-msg">Request pending…</div>
-        </div>`)
-    ].join('');
+    accList.innerHTML = accepted.map(c => `
+      <div class="contact-card contact-card-link" onclick="openChat(${c.id},'${esc(c.otherUsername)}')">
+        <div class="contact-card-name">${esc(c.otherUsername)}${c.unreadCount > 0 ? `<span class="contact-unread">${c.unreadCount}</span>` : ''}</div>
+        ${c.lastMessage ? `<div class="contact-last-msg">${esc(c.lastMessage)}</div>` : ''}
+      </div>`).join('');
   }
 
   async function acceptContact(id) {
