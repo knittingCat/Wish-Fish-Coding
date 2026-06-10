@@ -379,6 +379,23 @@ app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => 
   res.json({ success: true });
 });
 
+// ── Invites for current user ──────────────────────────────────────────────────
+app.get('/api/invites', authMiddleware, async (req, res) => {
+  const emailRes = await pool.query('SELECT email FROM users WHERE id=$1', [req.user.id]);
+  const email = emailRes.rows[0]?.email;
+  if (!email) return res.json([]);
+  const { rows } = await pool.query(`
+    SELECT i.id, s.code, s.title, s.scheduled_time, s.is_scheduled, s.is_active,
+           u.username AS host_username
+    FROM invites i
+    JOIN sessions s ON s.id = i.session_id
+    JOIN users u ON u.id = s.host_id
+    WHERE LOWER(i.email)=LOWER($1) AND s.is_deleted IS DISTINCT FROM 1
+    ORDER BY s.created_at DESC
+  `, [email]);
+  res.json(rows);
+});
+
 // ── Contacts ──────────────────────────────────────────────────────────────────
 
 app.post('/api/contacts', authMiddleware, async (req, res) => {
