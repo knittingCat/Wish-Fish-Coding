@@ -869,6 +869,7 @@
     const content = input.value.trim();
     if (!content || !socket) return;
     socket.emit('chat-message', { content });
+    appendChatMsg(getUsername(), content, new Date().toISOString());
     input.value = '';
   }
 

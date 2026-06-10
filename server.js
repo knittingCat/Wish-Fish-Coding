@@ -664,10 +664,11 @@ io.on('connection', (socket) => {
       'INSERT INTO messages (session_id,user_id,username,content) VALUES ($1,$2,$3,$4)',
       [socket.sessionDbId, socket.user.id, socket.user.username, text]
     );
-    io.to(socket.sessionCode).emit('chat-message', {
+    const ts = new Date().toISOString();
+    socket.broadcast.to(socket.sessionCode).emit('chat-message', {
       username: socket.user.username,
       content: text,
-      timestamp: new Date().toISOString()
+      timestamp: ts
     });
   });
 
