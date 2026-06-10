@@ -569,8 +569,7 @@ app.post('/api/contacts/:id/messages', authMiddleware, async (req, res) => {
   };
   const otherId = c.requester_id === uid ? c.addressee_id : c.requester_id;
   io.to(`user-${otherId}`).emit('new-contact-message', msgData);
-  io.to(`user-${uid}`).emit('new-contact-message', msgData);
-  res.json({ success: true, message: r.rows[0] });
+  res.json({ success: true, message: msgData.message });
 });
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────

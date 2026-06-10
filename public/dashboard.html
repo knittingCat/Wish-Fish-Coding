@@ -614,7 +614,9 @@
     if (!content) return;
     input.value = '';
     try {
-      await API.post(`/api/contacts/${activeChatId}/messages`, { content });
+      const { message } = await API.post(`/api/contacts/${activeChatId}/messages`, { content });
+      appendContactMsg({ ...message, sender_username: getUsername() });
+      scrollChatToBottom();
     } catch (err) { toast(err.message, 'err'); }
   }
 
