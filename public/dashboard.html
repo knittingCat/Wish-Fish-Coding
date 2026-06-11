@@ -59,35 +59,62 @@
   <!-- Contacts panel -->
   <div id="contactsPanel" style="display:none">
     <div id="contactListView">
-      <div id="pendingSection" style="display:none">
-        <div class="contacts-section-label">Awaiting Approval</div>
-        <div id="pendingList"></div>
+      <div class="contacts-sub-tabs">
+        <button class="contacts-sub-tab active" onclick="contactsSubTab('messages', this)">Messages</button>
+        <button class="contacts-sub-tab" onclick="contactsSubTab('groups', this)">Groups</button>
       </div>
-      <div id="acceptedSection">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div class="contacts-section-label" id="acceptedLabel" style="display:none">Contacts</div>
-          <button class="btn btn-secondary btn-sm" id="newGroupBtn" style="display:none;margin-bottom:8px" onclick="openNewGroupModal()">+ Group Chat</button>
+
+      <!-- Messages sub-view -->
+      <div id="contactsMessagesView">
+        <div id="pendingSection" style="display:none">
+          <div class="contacts-section-label">Awaiting Approval</div>
+          <div id="pendingList"></div>
         </div>
-        <div id="acceptedList"></div>
-        <div class="empty-state" id="contactsEmpty">
-          <h3>No contacts yet</h3>
-          <p>Send a contact request from a session's ··· menu.</p>
+        <div id="acceptedSection">
+          <div id="acceptedList"></div>
+          <div class="empty-state" id="contactsEmpty">
+            <h3>No contacts yet</h3>
+            <p>Send a contact request from a session's ··· menu.</p>
+          </div>
+        </div>
+        <div id="outgoingSection" style="display:none">
+          <div class="contacts-section-label">Pending Requests</div>
+          <div id="outgoingList"></div>
         </div>
       </div>
-      <div id="outgoingSection" style="display:none">
-        <div class="contacts-section-label">Pending Requests</div>
-        <div id="outgoingList"></div>
+
+      <!-- Groups sub-view -->
+      <div id="contactsGroupsView" style="display:none">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn btn-primary btn-sm" onclick="openNewGroupModal()">+ New Group</button>
+        </div>
+        <div id="groupsList"></div>
+        <div class="empty-state" id="groupsEmpty" style="display:none">
+          <h3>No group chats yet</h3>
+          <p>Create a group to message multiple people at once.</p>
+        </div>
       </div>
     </div>
+
     <div id="contactChatView" style="display:none">
       <div class="contact-chat-head">
         <button class="btn btn-ghost btn-sm" onclick="showContactList()">← Back</button>
         <span class="contact-chat-name" id="chatContactName"></span>
+        <div id="groupChatMenu" class="p-menu-wrap" style="display:none">
+          <button class="p-menu-btn" onclick="toggleChatMenu(event)">···</button>
+          <div class="p-menu-dropdown" id="chatMenuDropdown">
+            <button class="p-menu-item" onclick="openAddMembersModal()">Add Members</button>
+            <button class="p-menu-item" onclick="openRemoveMembersModal()">Remove Members</button>
+            <button class="p-menu-item p-menu-danger" onclick="deleteGroup()">Delete Group</button>
+          </div>
+        </div>
       </div>
-      <div class="contact-chat-msgs" id="contactChatMsgs"></div>
-      <div class="contact-chat-input-row">
-        <input type="text" id="contactMsgInput" placeholder="Message…" maxlength="500" autocomplete="off">
-        <button class="btn btn-primary btn-sm" onclick="sendContactMsg()">Send</button>
+      <div class="contact-chat-body">
+        <div class="contact-chat-msgs" id="contactChatMsgs"></div>
+        <div class="contact-chat-input-row">
+          <input type="text" id="contactMsgInput" placeholder="Message…" maxlength="500" autocomplete="off">
+          <button class="btn btn-primary btn-sm" onclick="sendContactMsg()">Send</button>
+        </div>
       </div>
     </div>
   </div>
@@ -213,12 +240,52 @@
       <input type="text" id="groupNameInput" placeholder="e.g. Team Alpha" maxlength="60">
     </div>
     <div class="form-group">
-      <label>Add Contacts</label>
-      <div id="groupMemberList" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
+      <label>Add Members</label>
+      <div id="newGroupChips" class="user-chips"></div>
+      <div class="user-search-wrap">
+        <input type="text" id="newGroupSearchInput" placeholder="Search by username…" autocomplete="off">
+        <div class="user-search-results" id="newGroupSearchResults"></div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeOverlay('newGroupOverlay')">Cancel</button>
       <button class="btn btn-primary" id="createGroupBtn" onclick="createGroupChat()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Members Modal ──────────────────────────────────────────────────── -->
+<div class="overlay" id="addMembersOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Add Members</h2>
+      <button class="modal-close" onclick="closeOverlay('addMembersOverlay')">&times;</button>
+    </div>
+    <div id="addMembersAlert" class="alert alert-err"></div>
+    <div class="form-group">
+      <div id="addMembersChips" class="user-chips"></div>
+      <div class="user-search-wrap">
+        <input type="text" id="addMembersSearchInput" placeholder="Search by username…" autocomplete="off">
+        <div class="user-search-results" id="addMembersSearchResults"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('addMembersOverlay')">Cancel</button>
+      <button class="btn btn-primary" id="addMembersBtn" onclick="submitAddMembers()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Remove Members Modal ───────────────────────────────────────────────── -->
+<div class="overlay" id="removeMembersOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Remove Members</h2>
+      <button class="modal-close" onclick="closeOverlay('removeMembersOverlay')">&times;</button>
+    </div>
+    <div id="removeMembersList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeOverlay('removeMembersOverlay')">Done</button>
     </div>
   </div>
 </div>
@@ -545,8 +612,86 @@
 
   // ── Contacts ───────────────────────────────────────────────────────────────
   let activeChatId = null;
-  let activeChatType = null; // 'contact' or 'group'
-  let acceptedContacts = []; // used for group chat member picker
+  let activeChatType = null; // 'contact' | 'group'
+  let activeGroupMembers = []; // members of currently open group
+  let contactsSubTabActive = 'messages';
+
+  // ── User search helper ─────────────────────────────────────────────────────
+  const userSearchState = {};
+
+  function initUserSearch(inputId, resultsId, chipsId) {
+    const input = document.getElementById(inputId);
+    const results = document.getElementById(resultsId);
+    const chipsEl = document.getElementById(chipsId);
+    let selected = [];
+    let timer;
+
+    userSearchState[inputId] = {
+      getSelected: () => [...selected],
+      clear: () => { selected = []; renderChips(); input.value = ''; results.style.display = 'none'; }
+    };
+
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const q = input.value.trim();
+        if (q.length < 2) { results.innerHTML = ''; results.style.display = 'none'; return; }
+        try {
+          const users = await API.get(`/api/users/search?q=${encodeURIComponent(q)}`);
+          const filtered = users.filter(u => !selected.find(s => s.id === u.id));
+          results.innerHTML = filtered.length
+            ? filtered.map(u => `<div class="user-search-result" onclick="userSearchPick('${inputId}',${u.id},'${esc(u.username)}')">${esc(u.username)}</div>`).join('')
+            : '<div class="user-search-noresult">No users found</div>';
+          results.style.display = '';
+        } catch {}
+      }, 250);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') results.style.display = 'none';
+    });
+
+    function renderChips() {
+      chipsEl.innerHTML = selected.map(s =>
+        `<span class="user-chip">${esc(s.username)} <button onclick="userSearchRemove('${inputId}',${s.id})">&times;</button></span>`
+      ).join('');
+    }
+
+    userSearchState[inputId].add = (id, username) => {
+      if (selected.find(s => s.id === id)) return;
+      selected.push({ id, username });
+      renderChips();
+      input.value = '';
+      results.style.display = 'none';
+    };
+
+    userSearchState[inputId].removeMember = (id) => {
+      selected = selected.filter(s => s.id !== id);
+      renderChips();
+    };
+  }
+
+  function userSearchPick(inputId, id, username) {
+    userSearchState[inputId]?.add(id, username);
+  }
+  function userSearchRemove(inputId, id) {
+    userSearchState[inputId]?.removeMember(id);
+  }
+
+  document.addEventListener('click', e => {
+    document.querySelectorAll('.user-search-results').forEach(el => {
+      if (!el.closest('.user-search-wrap')?.contains(e.target)) el.style.display = 'none';
+    });
+  });
+
+  // ── Contacts sub-tabs ──────────────────────────────────────────────────────
+  function contactsSubTab(tab, el) {
+    contactsSubTabActive = tab;
+    document.querySelectorAll('.contacts-sub-tab').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('contactsMessagesView').style.display = tab === 'messages' ? '' : 'none';
+    document.getElementById('contactsGroupsView').style.display  = tab === 'groups'   ? '' : 'none';
+  }
 
   async function sendRequestByUsername() {
     const input = document.getElementById('contactUsernameInput');
@@ -570,21 +715,20 @@
         API.get('/api/contacts'),
         API.get('/api/group-chats')
       ]);
-      renderContacts(contacts, groups);
+      renderContacts(contacts);
+      renderGroups(groups);
     } catch {}
     updateContactsBadge();
   }
 
-  function renderContacts(contacts, groups = []) {
+  function renderContacts(contacts) {
     const pending  = contacts.filter(c => c.status === 'pending' && !c.isRequester);
     const outgoing = contacts.filter(c => c.status === 'pending' && c.isRequester);
     const accepted = contacts.filter(c => c.status === 'accepted');
-    acceptedContacts = accepted;
 
     const pendSec = document.getElementById('pendingSection');
-    const pendList = document.getElementById('pendingList');
     pendSec.style.display = pending.length ? '' : 'none';
-    pendList.innerHTML = pending.map(c => `
+    document.getElementById('pendingList').innerHTML = pending.map(c => `
       <div class="contact-card" id="cc-${c.id}">
         <div class="contact-card-name">${esc(c.otherUsername)}</div>
         <div class="contact-card-actions">
@@ -593,10 +737,8 @@
         </div>
       </div>`).join('');
 
-    const outSec = document.getElementById('outgoingSection');
-    const outList = document.getElementById('outgoingList');
-    outSec.style.display = outgoing.length ? '' : 'none';
-    outList.innerHTML = outgoing.map(c => `
+    document.getElementById('outgoingSection').style.display = outgoing.length ? '' : 'none';
+    document.getElementById('outgoingList').innerHTML = outgoing.map(c => `
       <div class="contact-card">
         <div class="contact-card-name">${esc(c.otherUsername)}</div>
         <div class="contact-card-actions">
@@ -604,46 +746,37 @@
         </div>
       </div>`).join('');
 
-    const hasAccepted = accepted.length || groups.length;
-    document.getElementById('acceptedLabel').style.display = hasAccepted ? '' : 'none';
-    document.getElementById('newGroupBtn').style.display = accepted.length ? '' : 'none';
-    document.getElementById('contactsEmpty').style.display = (!pending.length && !outgoing.length && !hasAccepted) ? '' : 'none';
-
-    const accList = document.getElementById('acceptedList');
-    const contactCards = accepted.map(c => `
+    document.getElementById('contactsEmpty').style.display = (!pending.length && !outgoing.length && !accepted.length) ? '' : 'none';
+    document.getElementById('acceptedList').innerHTML = accepted.map(c => `
       <div class="contact-card contact-card-link" onclick="openChat(${c.id},'${esc(c.otherUsername)}','contact')">
         <div class="contact-card-name">${esc(c.otherUsername)}${c.unreadCount > 0 ? `<span class="contact-unread">${c.unreadCount}</span>` : ''}</div>
         ${c.lastMessage ? `<div class="contact-last-msg">${esc(c.lastMessage)}</div>` : ''}
       </div>`).join('');
-    const groupCards = groups.map(g => `
+  }
+
+  function renderGroups(groups) {
+    const el = document.getElementById('groupsList');
+    document.getElementById('groupsEmpty').style.display = groups.length ? 'none' : '';
+    el.innerHTML = groups.map(g => `
       <div class="contact-card contact-card-link" onclick="openChat(${g.id},'${esc(g.name)}','group')">
-        <div class="contact-card-name">👥 ${esc(g.name)}${g.unreadCount > 0 ? `<span class="contact-unread">${g.unreadCount}</span>` : ''}</div>
-        ${g.lastMessage ? `<div class="contact-last-msg">${esc(g.lastMessage)}</div>` : ''}
+        <div style="flex:1;min-width:0">
+          <div class="contact-card-name">${esc(g.name)}${g.unreadCount > 0 ? `<span class="contact-unread">${g.unreadCount}</span>` : ''}</div>
+          ${g.lastMessage ? `<div class="contact-last-msg">${esc(g.lastMessage)}</div>` : ''}
+        </div>
       </div>`).join('');
-    accList.innerHTML = contactCards + groupCards;
   }
 
   async function acceptContact(id) {
-    try {
-      await API.post(`/api/contacts/${id}/accept`, {});
-      toast('Contact added!', 'ok');
-      loadContacts();
-    } catch (err) { toast(err.message, 'err'); }
+    try { await API.post(`/api/contacts/${id}/accept`, {}); toast('Contact added!', 'ok'); loadContacts(); }
+    catch (err) { toast(err.message, 'err'); }
   }
-
   async function declineContact(id) {
-    try {
-      await API.post(`/api/contacts/${id}/decline`, {});
-      loadContacts();
-    } catch (err) { toast(err.message, 'err'); }
+    try { await API.post(`/api/contacts/${id}/decline`, {}); loadContacts(); }
+    catch (err) { toast(err.message, 'err'); }
   }
-
   async function cancelContact(id) {
-    try {
-      await API.post(`/api/contacts/${id}/cancel`, {});
-      toast('Request cancelled.', 'ok');
-      loadContacts();
-    } catch (err) { toast(err.message, 'err'); }
+    try { await API.post(`/api/contacts/${id}/cancel`, {}); toast('Request cancelled.', 'ok'); loadContacts(); }
+    catch (err) { toast(err.message, 'err'); }
   }
 
   async function openChat(chatId, name, type = 'contact') {
@@ -651,14 +784,18 @@
     activeChatType = type;
     document.getElementById('contactSearchBar').style.display = 'none';
     document.getElementById('contactListView').style.display = 'none';
-    document.getElementById('contactChatView').style.display = '';
+    document.getElementById('contactChatView').style.display = 'flex';
     document.getElementById('chatContactName').textContent = name;
+    document.getElementById('groupChatMenu').style.display = type === 'group' ? '' : 'none';
     document.getElementById('contactChatMsgs').innerHTML = '';
     try {
-      const url = type === 'group'
-        ? `/api/group-chats/${chatId}/messages`
-        : `/api/contacts/${chatId}/messages`;
+      const url = type === 'group' ? `/api/group-chats/${chatId}/messages` : `/api/contacts/${chatId}/messages`;
       const msgs = await API.get(url);
+      if (type === 'group') {
+        const groupData = await API.get('/api/group-chats');
+        const g = groupData.find(x => x.id === chatId);
+        activeGroupMembers = g?.members || [];
+      }
       msgs.forEach(m => appendContactMsg(m));
       scrollChatToBottom();
     } catch {}
@@ -669,9 +806,11 @@
   function showContactList() {
     activeChatId = null;
     activeChatType = null;
+    activeGroupMembers = [];
     document.getElementById('contactSearchBar').style.display = '';
     document.getElementById('contactChatView').style.display = 'none';
     document.getElementById('contactListView').style.display = '';
+    closeChatMenu();
     loadContacts();
   }
 
@@ -713,34 +852,99 @@
   function openNewGroupModal() {
     document.getElementById('groupNameInput').value = '';
     document.getElementById('newGroupAlert').className = 'alert alert-err';
-    const list = document.getElementById('groupMemberList');
-    list.innerHTML = acceptedContacts.map(c => `
-      <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer">
-        <input type="checkbox" value="${c.otherId}" data-username="${esc(c.otherUsername)}">
-        ${esc(c.otherUsername)}
-      </label>`).join('');
+    initUserSearch('newGroupSearchInput', 'newGroupSearchResults', 'newGroupChips');
     openOverlay('newGroupOverlay');
   }
 
   async function createGroupChat() {
     const name = document.getElementById('groupNameInput').value.trim();
     const alertEl = document.getElementById('newGroupAlert');
-    const checked = [...document.querySelectorAll('#groupMemberList input:checked')];
+    const members = userSearchState['newGroupSearchInput']?.getSelected() || [];
     if (!name) { alertEl.textContent = 'Enter a group name'; alertEl.className = 'alert alert-err show'; return; }
-    if (!checked.length) { alertEl.textContent = 'Select at least one contact'; alertEl.className = 'alert alert-err show'; return; }
-    const memberUserIds = checked.map(el => parseInt(el.value));
+    if (!members.length) { alertEl.textContent = 'Add at least one member'; alertEl.className = 'alert alert-err show'; return; }
     const btn = document.getElementById('createGroupBtn');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
     try {
-      const group = await API.post('/api/group-chats', { name, memberUserIds });
+      const group = await API.post('/api/group-chats', { name, memberUserIds: members.map(m => m.id) });
       closeOverlay('newGroupOverlay');
+      contactsSubTab('groups', document.querySelector('.contacts-sub-tab:nth-child(2)'));
+      await loadContacts();
       openChat(group.id, group.name, 'group');
     } catch (err) {
       alertEl.textContent = err.message;
       alertEl.className = 'alert alert-err show';
-    } finally {
-      btn.disabled = false; btn.textContent = 'Create';
-    }
+    } finally { btn.disabled = false; btn.textContent = 'Create'; }
+  }
+
+  // ── Group management ───────────────────────────────────────────────────────
+  function toggleChatMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('chatMenuDropdown');
+    menu.classList.toggle('open');
+  }
+  function closeChatMenu() {
+    document.getElementById('chatMenuDropdown')?.classList.remove('open');
+  }
+  document.addEventListener('click', () => closeChatMenu());
+
+  function openAddMembersModal() {
+    closeChatMenu();
+    document.getElementById('addMembersAlert').className = 'alert alert-err';
+    initUserSearch('addMembersSearchInput', 'addMembersSearchResults', 'addMembersChips');
+    openOverlay('addMembersOverlay');
+  }
+
+  async function submitAddMembers() {
+    const members = userSearchState['addMembersSearchInput']?.getSelected() || [];
+    const alertEl = document.getElementById('addMembersAlert');
+    if (!members.length) { alertEl.textContent = 'Search and select at least one user'; alertEl.className = 'alert alert-err show'; return; }
+    const btn = document.getElementById('addMembersBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await API.post(`/api/group-chats/${activeChatId}/members`, { userIds: members.map(m => m.id) });
+      closeOverlay('addMembersOverlay');
+      toast('Members added!', 'ok');
+      const groupData = await API.get('/api/group-chats');
+      const g = groupData.find(x => x.id === activeChatId);
+      activeGroupMembers = g?.members || [];
+    } catch (err) {
+      alertEl.textContent = err.message;
+      alertEl.className = 'alert alert-err show';
+    } finally { btn.disabled = false; btn.textContent = 'Add'; }
+  }
+
+  function openRemoveMembersModal() {
+    closeChatMenu();
+    const list = document.getElementById('removeMembersList');
+    list.innerHTML = activeGroupMembers.map(m => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:0.9rem;font-weight:600">${esc(m.username)}</span>
+        ${m.username !== getUsername()
+          ? `<button class="btn btn-danger btn-sm" onclick="removeMember(${m.id})">Remove</button>`
+          : '<span style="font-size:0.78rem;color:var(--txt3)">You</span>'}
+      </div>`).join('');
+    openOverlay('removeMembersOverlay');
+  }
+
+  async function removeMember(userId) {
+    try {
+      await API.delete(`/api/group-chats/${activeChatId}/members/${userId}`);
+      const groupData = await API.get('/api/group-chats');
+      const g = groupData.find(x => x.id === activeChatId);
+      activeGroupMembers = g?.members || [];
+      openRemoveMembersModal();
+      toast('Member removed.', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function deleteGroup() {
+    closeChatMenu();
+    if (!confirm('Delete this group chat? This cannot be undone.')) return;
+    try {
+      await API.delete(`/api/group-chats/${activeChatId}`);
+      showContactList();
+      toast('Group deleted.', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
   }
 
   async function updateContactsBadge() {

@@ -510,7 +510,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 
 .contact-card-name {
   font-size: 0.92rem; font-weight: 700; color: var(--txt1);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
 }
 .contact-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
@@ -518,7 +518,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent); color: #fff;
   border-radius: 20px; min-width: 18px; height: 18px;
-  padding: 0 5px; font-size: 0.65rem; font-weight: 800;
+  padding: 0 5px; font-size: 0.65rem; font-weight: 800; flex-shrink: 0;
 }
 
 .contact-last-msg {
@@ -526,20 +526,51 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px;
 }
 
-/* ── Contact chat view ─────────────────────────────────────────────────────── */
+/* Contacts sub-tabs */
+.contacts-sub-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.contacts-sub-tab {
+  padding: 10px 20px; font-size: 0.88rem; font-weight: 600;
+  color: var(--txt3); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: all .15s; background: none;
+  border-top: none; border-left: none; border-right: none; font-family: inherit;
+}
+.contacts-sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.contacts-sub-tab:hover:not(.active) { color: var(--txt1); }
+
+/* ── Contact chat view (full page) ─────────────────────────────────────────── */
+#contactChatView {
+  position: fixed;
+  top: 52px; left: 0; right: 0; bottom: 0;
+  background: var(--bg0);
+  z-index: 100;
+  display: flex; flex-direction: column;
+}
+
 .contact-chat-head {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 0 14px; border-bottom: 1px solid #d8e6f0; margin-bottom: 12px;
+  padding: 14px 24px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.contact-chat-name { font-size: 1rem; font-weight: 800; color: var(--txt1); }
+.contact-chat-name { font-size: 1rem; font-weight: 800; color: var(--txt1); flex: 1; min-width: 0; }
+
+.contact-chat-body {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+  max-width: 760px; width: 100%; margin: 0 auto; padding: 0 24px;
+}
 
 .contact-chat-msgs {
-  height: 400px; overflow-y: auto;
+  flex: 1; overflow-y: auto;
+  padding: 16px 0;
   display: flex; flex-direction: column; gap: 10px;
-  padding: 4px 2px; margin-bottom: 14px;
 }
 
-.contact-msg { max-width: 80%; align-self: flex-start; }
+.contact-msg { max-width: 72%; align-self: flex-start; }
 
 .contact-msg-meta { font-size: 0.7rem; color: var(--txt3); margin-bottom: 3px; }
 .contact-msg-body {
@@ -548,15 +579,40 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   padding: 8px 13px; border-radius: 12px;
   font-size: 0.88rem; line-height: 1.5; word-break: break-word;
 }
+.contact-msg-me { align-self: flex-end; }
 .contact-msg-me .contact-msg-body {
   background: var(--accent-dim); border: 1px solid var(--border2); color: var(--txt1);
 }
+.contact-msg-me .contact-msg-meta { text-align: right; }
 
 .contact-chat-input-row {
   display: flex; gap: 8px;
-  border-top: 1px solid #d8e6f0; padding-top: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .contact-chat-input-row input { flex: 1; }
+
+/* User search (for group modals) */
+.user-search-wrap { position: relative; margin-bottom: 8px; }
+.user-search-results {
+  display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 10px; z-index: 300; max-height: 180px; overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+.user-search-result {
+  padding: 10px 14px; cursor: pointer; font-size: 0.88rem; transition: background .12s;
+}
+.user-search-result:hover { background: var(--bg3); }
+.user-search-noresult { padding: 10px 14px; font-size: 0.85rem; color: var(--txt3); }
+.user-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--accent-dim); border: 1px solid var(--border2);
+  color: var(--accent); padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;
+}
+.user-chip button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; line-height: 1; font-size: 1rem; }
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
@@ -710,5 +766,10 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .contact-msg-me .contact-msg-body { background: var(--accent-dim); }
   .contact-chat-head { border-color: #2a3550; }
   .contact-chat-input-row { border-color: #2a3550; }
+
+  .contacts-sub-tab { color: var(--txt3); }
+  .contacts-sub-tab.active { color: var(--accent); }
+  .user-search-results { background: var(--bg2); border-color: #2a3550; }
+  .user-search-result:hover { background: var(--bg3); }
 
 }

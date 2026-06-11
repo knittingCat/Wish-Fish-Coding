@@ -731,6 +731,49 @@ app.post('/api/group-chats/:id/messages', authMiddleware, async (req, res) => {
   res.json({ success: true, message: msgData.message });
 });
 
+// User search
+app.get('/api/users/search', authMiddleware, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return res.json([]);
+  const result = await pool.query(
+    `SELECT id, username FROM users WHERE LOWER(username) LIKE LOWER($1) AND id != $2 LIMIT 10`,
+    [`%${q}%`, req.user.id]
+  );
+  res.json(result.rows);
+});
+
+// Add members to group
+app.post('/api/group-chats/:id/members', authMiddleware, async (req, res) => {
+  const { userIds } = req.body || {};
+  if (!Array.isArray(userIds) || !userIds.length) return res.status(400).json({ error: 'userIds required' });
+  const member = await pool.query('SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  for (const uid of userIds.map(Number)) {
+    await pool.query('INSERT INTO group_chat_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.params.id, uid]);
+  }
+  res.json({ success: true });
+});
+
+// Remove member from group
+app.delete('/api/group-chats/:id/members/:userId', authMiddleware, async (req, res) => {
+  const group = await pool.query('SELECT created_by FROM group_chats WHERE id=$1', [req.params.id]);
+  if (!group.rows.length) return res.status(404).json({ error: 'Group not found' });
+  const isCreator = group.rows[0].created_by === req.user.id;
+  const isSelf = parseInt(req.params.userId) === req.user.id;
+  if (!isCreator && !isSelf) return res.status(403).json({ error: 'Not authorized' });
+  await pool.query('DELETE FROM group_chat_members WHERE group_id=$1 AND user_id=$2', [req.params.id, req.params.userId]);
+  res.json({ success: true });
+});
+
+// Delete group chat
+app.delete('/api/group-chats/:id', authMiddleware, async (req, res) => {
+  const group = await pool.query('SELECT created_by FROM group_chats WHERE id=$1', [req.params.id]);
+  if (!group.rows.length) return res.status(404).json({ error: 'Group not found' });
+  if (group.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the creator can delete the group' });
+  await pool.query('DELETE FROM group_chats WHERE id=$1', [req.params.id]);
+  res.json({ success: true });
+});
+
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const roomState = new Map();
 
