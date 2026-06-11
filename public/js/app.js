@@ -6,6 +6,10 @@ if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
   localStorage.removeItem('username');
 }
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 // Shared utilities — included on every page
 
 const API = {

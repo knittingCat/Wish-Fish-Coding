@@ -1,0 +1,17 @@
+{
+  "name": "Wish Fish Coding",
+  "short_name": "Wish Fish",
+  "description": "Collaborative coding sessions",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#161b27",
+  "theme_color": "#5aabde",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
