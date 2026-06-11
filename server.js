@@ -276,6 +276,7 @@ function authMiddleware(req, res, next) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/ping', (_, res) => res.json({ ok: true }));
 app.get('/dashboard', (_, res) => res.sendFile(path.join(__dirname, 'public/dashboard.html')));
 app.get('/session',   (_, res) => res.sendFile(path.join(__dirname, 'public/session.html')));
 app.get('/register',  (_, res) => res.sendFile(path.join(__dirname, 'public/register.html')));

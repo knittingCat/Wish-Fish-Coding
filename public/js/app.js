@@ -10,6 +10,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
+// Keep Render server warm (free tier sleeps after ~15 min inactivity)
+setInterval(() => fetch('/ping').catch(() => {}), 8 * 60 * 1000);
+
 // Shared utilities — included on every page
 
 const API = {
