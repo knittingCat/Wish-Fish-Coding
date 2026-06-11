@@ -671,21 +671,21 @@ io.on('connection', (socket) => {
     await doJoin(socket, session, room, state);
   });
 
-  socket.on('chat-message', async ({ content }) => {
+  socket.on('chat-message', ({ content }) => {
     if (!socket.sessionCode || !content?.trim()) return;
     const roomSt = roomState.get(socket.sessionCode);
     if (roomSt?.participants.get(socket.id)?.suspended) return;
     const text = content.trim();
-    await pool.query(
-      'INSERT INTO messages (session_id,user_id,username,content) VALUES ($1,$2,$3,$4)',
-      [socket.sessionDbId, socket.user.id, socket.user.username, text]
-    );
     const ts = new Date().toISOString();
     socket.broadcast.to(socket.sessionCode).emit('chat-message', {
       username: socket.user.username,
       content: text,
       timestamp: ts
     });
+    pool.query(
+      'INSERT INTO messages (session_id,user_id,username,content) VALUES ($1,$2,$3,$4)',
+      [socket.sessionDbId, socket.user.id, socket.user.username, text]
+    ).catch(err => console.error('Failed to save message:', err));
   });
 
   socket.on('webrtc-offer', ({ offer, targetSocketId }) => {
