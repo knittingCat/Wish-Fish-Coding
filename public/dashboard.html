@@ -859,10 +859,10 @@
     const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const diff = Math.round((today - dDate) / 86400000);
-    if (diff === 0) return `Today ${time}`;
-    if (diff === 1) return `Yesterday ${time}`;
-    if (diff < 7) return `${d.toLocaleDateString([], { weekday: 'short' })} ${time}`;
-    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+    if (diff === 0) return `Today · ${time}`;
+    if (diff === 1) return `Yesterday · ${time}`;
+    if (diff < 7) return `${d.toLocaleDateString([], { weekday: 'short' })} · ${time}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${time}`;
   }
 
   function appendContactMsg(m) {
