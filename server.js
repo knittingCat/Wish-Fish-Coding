@@ -129,6 +129,15 @@ async function initDb() {
       last_read TIMESTAMP DEFAULT NOW(),
       PRIMARY KEY (group_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS group_chat_invites (
+      id         SERIAL PRIMARY KEY,
+      group_id   INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+      inviter_id INTEGER NOT NULL REFERENCES users(id),
+      invitee_id INTEGER NOT NULL REFERENCES users(id),
+      status     TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(group_id, invitee_id)
+    );
   `);
   console.log('Database ready');
 }
@@ -489,7 +498,8 @@ app.get('/api/contacts/notifications', authMiddleware, async (req, res) => {
     );
     unread += parseInt(r.rows[0].count);
   }
-  res.json({ pendingRequests: parseInt(pend.rows[0].count), unreadMessages: unread });
+  const groupInvites = await pool.query(`SELECT COUNT(*) FROM group_chat_invites WHERE invitee_id=$1 AND status='pending'`, [uid]);
+  res.json({ pendingRequests: parseInt(pend.rows[0].count) + parseInt(groupInvites.rows[0].count), unreadMessages: unread });
 });
 
 app.get('/api/contacts', authMiddleware, async (req, res) => {
@@ -742,15 +752,64 @@ app.get('/api/users/search', authMiddleware, async (req, res) => {
   res.json(result.rows);
 });
 
-// Add members to group
+// Invite members to group (sends request, does not auto-add)
 app.post('/api/group-chats/:id/members', authMiddleware, async (req, res) => {
   const { userIds } = req.body || {};
   if (!Array.isArray(userIds) || !userIds.length) return res.status(400).json({ error: 'userIds required' });
   const member = await pool.query('SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2', [req.params.id, req.user.id]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const group = await pool.query('SELECT name FROM group_chats WHERE id=$1', [req.params.id]);
+  if (!group.rows.length) return res.status(404).json({ error: 'Group not found' });
   for (const uid of userIds.map(Number)) {
-    await pool.query('INSERT INTO group_chat_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.params.id, uid]);
+    await pool.query(
+      `INSERT INTO group_chat_invites (group_id, inviter_id, invitee_id)
+       VALUES ($1,$2,$3) ON CONFLICT (group_id, invitee_id) DO UPDATE SET status='pending', created_at=NOW()`,
+      [req.params.id, req.user.id, uid]
+    );
+    io.to(`user-${uid}`).emit('group-invite-received', {
+      groupId: parseInt(req.params.id),
+      groupName: group.rows[0].name,
+      from: { username: req.user.username }
+    });
   }
+  res.json({ success: true });
+});
+
+// Get pending group invites for current user
+app.get('/api/group-chats/invites', authMiddleware, async (req, res) => {
+  const result = await pool.query(`
+    SELECT gci.id, gci.group_id, gc.name AS group_name,
+           u.username AS inviter_username, gci.created_at
+    FROM group_chat_invites gci
+    JOIN group_chats gc ON gc.id = gci.group_id
+    JOIN users u ON u.id = gci.inviter_id
+    WHERE gci.invitee_id=$1 AND gci.status='pending'
+    ORDER BY gci.created_at DESC
+  `, [req.user.id]);
+  res.json(result.rows);
+});
+
+// Accept group invite
+app.post('/api/group-chat-invites/:inviteId/accept', authMiddleware, async (req, res) => {
+  const inv = await pool.query(
+    `SELECT * FROM group_chat_invites WHERE id=$1 AND invitee_id=$2 AND status='pending'`,
+    [req.params.inviteId, req.user.id]
+  );
+  if (!inv.rows.length) return res.status(404).json({ error: 'Invite not found' });
+  const { group_id } = inv.rows[0];
+  await pool.query(`UPDATE group_chat_invites SET status='accepted' WHERE id=$1`, [req.params.inviteId]);
+  await pool.query(`INSERT INTO group_chat_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [group_id, req.user.id]);
+  res.json({ success: true, groupId: group_id });
+});
+
+// Decline group invite
+app.post('/api/group-chat-invites/:inviteId/decline', authMiddleware, async (req, res) => {
+  const inv = await pool.query(
+    `SELECT * FROM group_chat_invites WHERE id=$1 AND invitee_id=$2 AND status='pending'`,
+    [req.params.inviteId, req.user.id]
+  );
+  if (!inv.rows.length) return res.status(404).json({ error: 'Invite not found' });
+  await pool.query(`UPDATE group_chat_invites SET status='declined' WHERE id=$1`, [req.params.inviteId]);
   res.json({ success: true });
 });
 

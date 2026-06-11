@@ -711,12 +711,13 @@
 
   async function loadContacts() {
     try {
-      const [contacts, groups] = await Promise.all([
+      const [contacts, groups, groupInvites] = await Promise.all([
         API.get('/api/contacts'),
-        API.get('/api/group-chats')
+        API.get('/api/group-chats'),
+        API.get('/api/group-chats/invites')
       ]);
       renderContacts(contacts);
-      renderGroups(groups);
+      renderGroups(groups, groupInvites);
     } catch {}
     updateContactsBadge();
   }
@@ -754,16 +755,49 @@
       </div>`).join('');
   }
 
-  function renderGroups(groups) {
+  function renderGroups(groups, invites = []) {
     const el = document.getElementById('groupsList');
-    document.getElementById('groupsEmpty').style.display = groups.length ? 'none' : '';
-    el.innerHTML = groups.map(g => `
+    document.getElementById('groupsEmpty').style.display = (!groups.length && !invites.length) ? '' : 'none';
+    const invitesHtml = invites.length ? `
+      <div class="contacts-section-label">Invites</div>
+      ${invites.map(inv => `
+        <div class="contact-card">
+          <div style="flex:1;min-width:0">
+            <div class="contact-card-name">${esc(inv.group_name)}</div>
+            <div class="contact-last-msg">from ${esc(inv.inviter_username)}</div>
+          </div>
+          <div class="contact-card-actions">
+            <button class="btn btn-primary btn-sm" onclick="acceptGroupInvite(${inv.id})">Join</button>
+            <button class="btn btn-secondary btn-sm" onclick="declineGroupInvite(${inv.id})">Decline</button>
+          </div>
+        </div>`).join('')}
+    ` : '';
+    el.innerHTML = invitesHtml + groups.map(g => `
       <div class="contact-card contact-card-link" onclick="openChat(${g.id},'${esc(g.name)}','group')">
         <div style="flex:1;min-width:0">
           <div class="contact-card-name">${esc(g.name)}${g.unreadCount > 0 ? `<span class="contact-unread">${g.unreadCount}</span>` : ''}</div>
           ${g.lastMessage ? `<div class="contact-last-msg">${esc(g.lastMessage)}</div>` : ''}
         </div>
       </div>`).join('');
+  }
+
+  async function acceptGroupInvite(inviteId) {
+    try {
+      const { groupId } = await API.post(`/api/group-chat-invites/${inviteId}/accept`, {});
+      toast('Joined group!', 'ok');
+      await loadContacts();
+      const groupData = await API.get('/api/group-chats');
+      const g = groupData.find(x => x.id === groupId);
+      if (g) openChat(g.id, g.name, 'group');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function declineGroupInvite(inviteId) {
+    try {
+      await API.post(`/api/group-chat-invites/${inviteId}/decline`, {});
+      toast('Invite declined.', 'ok');
+      loadContacts();
+    } catch (err) { toast(err.message, 'err'); }
   }
 
   async function acceptContact(id) {
@@ -814,12 +848,26 @@
     loadContacts();
   }
 
+  function fmtMsgTime(iso) {
+    const d = new Date(iso);
+    const now = new Date();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diff = Math.round((today - dDate) / 86400000);
+    if (diff === 0) return `Today ${time}`;
+    if (diff === 1) return `Yesterday ${time}`;
+    if (diff < 7) return `${d.toLocaleDateString([], { weekday: 'short' })} ${time}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+  }
+
   function appendContactMsg(m) {
     const el = document.getElementById('contactChatMsgs');
     const div = document.createElement('div');
     const isMe = m.sender_username === getUsername();
+    const displayName = isMe ? 'You' : esc(m.sender_username);
     div.className = 'contact-msg' + (isMe ? ' contact-msg-me' : '');
-    div.innerHTML = `<div class="contact-msg-meta">${esc(m.sender_username)} · ${fmtChatTime(m.created_at)}</div><div class="contact-msg-body">${esc(m.content)}</div>`;
+    div.innerHTML = `<div class="contact-msg-meta">${displayName} &nbsp;${fmtMsgTime(m.created_at)}</div><div class="contact-msg-body">${esc(m.content)}</div>`;
     el.appendChild(div);
   }
 
@@ -903,7 +951,7 @@
     try {
       await API.post(`/api/group-chats/${activeChatId}/members`, { userIds: members.map(m => m.id) });
       closeOverlay('addMembersOverlay');
-      toast('Members added!', 'ok');
+      toast('Invite sent!', 'ok');
       const groupData = await API.get('/api/group-chats');
       const g = groupData.find(x => x.id === activeChatId);
       activeGroupMembers = g?.members || [];
@@ -987,6 +1035,11 @@
       updateContactsBadge();
       if (currentTab === 'contacts') loadContacts();
     }
+  });
+  dashSocket.on('group-invite-received', ({ groupName, from }) => {
+    toast(`${from.username} invited you to "${groupName}"`, 'ok');
+    updateContactsBadge();
+    if (currentTab === 'contacts' && contactsSubTabActive === 'groups') loadContacts();
   });
 
   // Check for ?tab=contacts on load
