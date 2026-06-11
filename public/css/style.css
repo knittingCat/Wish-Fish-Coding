@@ -578,7 +578,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 }
 .contact-msg-body {
   display: inline-block;
-  background: var(--bg3); color: var(--txt1);
+  background: #cdd8e3; color: var(--txt1);
   padding: 10px 14px; border-radius: 16px;
   font-size: 0.9rem; line-height: 1.55; word-break: break-word;
 }
