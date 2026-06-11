@@ -68,6 +68,16 @@ nav {
   box-shadow: 0 2px 8px rgba(0,0,0,.15);
   -webkit-app-region: drag;
   app-region: drag;
+  overflow: hidden;
+}
+/* Cover title bar portion with bg0 so it contrasts with the blue nav */
+nav::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: env(titlebar-area-y, 0px);
+  background: var(--bg0);
+  -webkit-app-region: drag;
 }
 nav .brand span { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
 nav .brand .fish { color: #ffffff; }
@@ -566,7 +576,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 
 .contact-chat-body {
   flex: 1; display: flex; flex-direction: column; min-height: 0;
-  max-width: 760px; width: 100%; margin: 0 auto; padding: 0 24px;
+  width: 100%; padding: 0 24px;
 }
 
 .contact-chat-msgs {

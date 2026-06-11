@@ -871,7 +871,7 @@
     const isMe = m.sender_username === getUsername();
     const displayName = isMe ? 'You' : esc(m.sender_username);
     div.className = 'contact-msg' + (isMe ? ' contact-msg-me' : '');
-    div.innerHTML = `<div class="contact-msg-meta">${displayName} &nbsp;${fmtMsgTime(m.created_at)}</div><div class="contact-msg-body">${esc(m.content)}</div>`;
+    div.innerHTML = `<div class="contact-msg-meta">${displayName} · ${fmtMsgTime(m.created_at)}</div><div class="contact-msg-body">${esc(m.content)}</div>`;
     el.appendChild(div);
   }
 
