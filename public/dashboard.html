@@ -609,6 +609,7 @@
 
   async function openChat(contactId, username) {
     activeChatId = contactId;
+    document.getElementById('contactSearchBar').style.display = 'none';
     document.getElementById('contactListView').style.display = 'none';
     document.getElementById('contactChatView').style.display = '';
     document.getElementById('chatContactName').textContent = username;
@@ -624,6 +625,7 @@
 
   function showContactList() {
     activeChatId = null;
+    document.getElementById('contactSearchBar').style.display = '';
     document.getElementById('contactChatView').style.display = 'none';
     document.getElementById('contactListView').style.display = '';
     loadContacts();
