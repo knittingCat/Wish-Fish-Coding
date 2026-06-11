@@ -583,7 +583,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   font-size: 0.9rem; line-height: 1.55; word-break: break-word;
 }
 .contact-msg-me .contact-msg-body {
-  background: var(--accent); color: #fff; border: none;
+  background: #2563eb; color: #fff; border: none;
 }
 
 .contact-chat-input-row {
@@ -764,7 +764,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .contact-card { background: var(--bg1); border-color: #2a3550; }
   .contact-card-link:hover { border-color: var(--accent); }
   .contact-msg-body { background: #1e2a3a; color: #e8f0ff; }
-  .contact-msg-me .contact-msg-body { background: var(--accent); color: #fff; }
+  .contact-msg-me .contact-msg-body { background: #2563eb; color: #fff; }
   .contact-chat-head { border-color: #2a3550; }
   .contact-chat-input-row { border-color: #2a3550; }
 
