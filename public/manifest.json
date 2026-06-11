@@ -4,6 +4,7 @@
   "description": "Collaborative coding sessions",
   "start_url": "/dashboard",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#161b27",
   "theme_color": "#5aabde",
   "icons": [
