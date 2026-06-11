@@ -104,6 +104,32 @@ async function initDb() {
   await pool.query(`ALTER TABLE session_bans ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT 'removed'`);
   await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS requester_last_read TIMESTAMP`);
   await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS addressee_last_read TIMESTAMP`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS group_chats (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_by INTEGER NOT NULL REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS group_chat_members (
+      group_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id),
+      PRIMARY KEY (group_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS group_chat_messages (
+      id SERIAL PRIMARY KEY,
+      group_id  INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+      sender_id INTEGER NOT NULL REFERENCES users(id),
+      content   TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS group_chat_reads (
+      group_id  INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id),
+      last_read TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (group_id, user_id)
+    );
+  `);
   console.log('Database ready');
 }
 
@@ -453,6 +479,16 @@ app.get('/api/contacts/notifications', authMiddleware, async (req, res) => {
     );
     unread += parseInt(r.rows[0].count);
   }
+  const groups = await pool.query('SELECT group_id FROM group_chat_members WHERE user_id=$1', [uid]);
+  for (const g of groups.rows) {
+    const readRow = await pool.query('SELECT last_read FROM group_chat_reads WHERE group_id=$1 AND user_id=$2', [g.group_id, uid]);
+    const lastRead = readRow.rows[0]?.last_read || new Date(0);
+    const r = await pool.query(
+      `SELECT COUNT(*) FROM group_chat_messages WHERE group_id=$1 AND sender_id!=$2 AND created_at>$3`,
+      [g.group_id, uid, lastRead]
+    );
+    unread += parseInt(r.rows[0].count);
+  }
   res.json({ pendingRequests: parseInt(pend.rows[0].count), unreadMessages: unread });
 });
 
@@ -587,6 +623,111 @@ app.post('/api/contacts/:id/messages', authMiddleware, async (req, res) => {
   };
   const otherId = c.requester_id === uid ? c.addressee_id : c.requester_id;
   io.to(`user-${otherId}`).emit('new-contact-message', msgData);
+  res.json({ success: true, message: msgData.message });
+});
+
+// ── Group Chats ───────────────────────────────────────────────────────────────
+
+app.post('/api/group-chats', authMiddleware, async (req, res) => {
+  const { name, memberUserIds } = req.body || {};
+  if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!Array.isArray(memberUserIds) || !memberUserIds.length)
+    return res.status(400).json({ error: 'At least one member required' });
+  const r = await pool.query(
+    'INSERT INTO group_chats (name, created_by) VALUES ($1,$2) RETURNING id',
+    [name.trim(), req.user.id]
+  );
+  const groupId = r.rows[0].id;
+  const allMembers = [...new Set([req.user.id, ...memberUserIds.map(Number)])];
+  for (const uid of allMembers) {
+    await pool.query(
+      'INSERT INTO group_chat_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [groupId, uid]
+    );
+  }
+  res.json({ id: groupId, name: name.trim() });
+});
+
+app.get('/api/group-chats', authMiddleware, async (req, res) => {
+  const uid = req.user.id;
+  const groups = await pool.query(`
+    SELECT gc.id, gc.name FROM group_chats gc
+    JOIN group_chat_members gcm ON gcm.group_id=gc.id
+    WHERE gcm.user_id=$1 ORDER BY gc.created_at DESC
+  `, [uid]);
+  const result = await Promise.all(groups.rows.map(async g => {
+    const lastMsg = await pool.query(
+      `SELECT m.content, m.created_at, u.username AS sender_username
+       FROM group_chat_messages m JOIN users u ON u.id=m.sender_id
+       WHERE m.group_id=$1 ORDER BY m.created_at DESC LIMIT 1`, [g.id]
+    );
+    const readRow = await pool.query(
+      'SELECT last_read FROM group_chat_reads WHERE group_id=$1 AND user_id=$2', [g.id, uid]
+    );
+    const lastRead = readRow.rows[0]?.last_read || new Date(0);
+    const unread = await pool.query(
+      `SELECT COUNT(*) FROM group_chat_messages WHERE group_id=$1 AND sender_id!=$2 AND created_at>$3`,
+      [g.id, uid, lastRead]
+    );
+    const members = await pool.query(
+      `SELECT u.id, u.username FROM group_chat_members gcm JOIN users u ON u.id=gcm.user_id WHERE gcm.group_id=$1`, [g.id]
+    );
+    return {
+      id: g.id, name: g.name, isGroup: true,
+      lastMessage: lastMsg.rows[0]?.content || null,
+      lastMessageAt: lastMsg.rows[0]?.created_at || null,
+      unreadCount: parseInt(unread.rows[0].count),
+      members: members.rows
+    };
+  }));
+  res.json(result);
+});
+
+app.get('/api/group-chats/:id/messages', authMiddleware, async (req, res) => {
+  const uid = req.user.id;
+  const member = await pool.query(
+    'SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2', [req.params.id, uid]
+  );
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const msgs = await pool.query(
+    `SELECT m.id, m.content, m.created_at, m.sender_id, u.username AS sender_username
+     FROM group_chat_messages m JOIN users u ON u.id=m.sender_id
+     WHERE m.group_id=$1 ORDER BY m.created_at ASC LIMIT 200`, [req.params.id]
+  );
+  await pool.query(
+    `INSERT INTO group_chat_reads (group_id, user_id, last_read) VALUES ($1,$2,NOW())
+     ON CONFLICT (group_id, user_id) DO UPDATE SET last_read=NOW()`,
+    [req.params.id, uid]
+  );
+  res.json(msgs.rows);
+});
+
+app.post('/api/group-chats/:id/messages', authMiddleware, async (req, res) => {
+  const { content } = req.body || {};
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+  const uid = req.user.id;
+  const member = await pool.query(
+    'SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2', [req.params.id, uid]
+  );
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const r = await pool.query(
+    'INSERT INTO group_chat_messages (group_id, sender_id, content) VALUES ($1,$2,$3) RETURNING *',
+    [req.params.id, uid, content.trim()]
+  );
+  await pool.query(
+    `INSERT INTO group_chat_reads (group_id, user_id, last_read) VALUES ($1,$2,NOW())
+     ON CONFLICT (group_id, user_id) DO UPDATE SET last_read=NOW()`,
+    [req.params.id, uid]
+  );
+  const me = await pool.query('SELECT username FROM users WHERE id=$1', [uid]);
+  const msgData = {
+    groupId: parseInt(req.params.id),
+    message: { id: r.rows[0].id, content: r.rows[0].content, created_at: r.rows[0].created_at, sender_id: uid, sender_username: me.rows[0]?.username }
+  };
+  const others = await pool.query(
+    'SELECT user_id FROM group_chat_members WHERE group_id=$1 AND user_id!=$2', [req.params.id, uid]
+  );
+  for (const m of others.rows) io.to(`user-${m.user_id}`).emit('new-group-message', msgData);
   res.json({ success: true, message: msgData.message });
 });
 
