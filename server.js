@@ -146,6 +146,7 @@ function emailShell(extraStyles, content) {
 <style>
   .wrap { font-family:Arial,sans-serif; background:#ffffff; color:#1a1a2e; padding:36px; border-radius:12px; max-width:480px; margin:auto; border:1px solid #d0d8e8; }
   .btn { display:inline-block; background:linear-gradient(135deg,#1e90ff,#0070dd); color:white !important; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:600; }
+  a[href^="mailto:"] { color:inherit !important; text-decoration:none !important; pointer-events:none; cursor:text; }
   @media (prefers-color-scheme: dark) {
     .wrap { background:#161b27 !important; color:#e8f0ff !important; border-color:#2a3550 !important; }
   }
