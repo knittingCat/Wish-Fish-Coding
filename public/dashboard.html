@@ -52,6 +52,8 @@
     <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Session</button>
   </div>
 
+  <div id="invitesGrid" class="sessions-grid" style="display:none;margin-bottom:28px"></div>
+
   <div id="sessionsGrid" class="sessions-grid"></div>
 
   <!-- Contacts panel -->
@@ -213,11 +215,44 @@
   // ── Load sessions ──────────────────────────────────────────────────────────
   async function loadSessions() {
     try {
-      allSessions = await API.get('/api/sessions');
+      [allSessions] = await Promise.all([
+        API.get('/api/sessions'),
+        loadInvites()
+      ]);
       renderSessions();
     } catch (err) {
       if (err.message.includes('Invalid token') || err.message.includes('No token')) logout();
     }
+  }
+
+  async function loadInvites() {
+    try {
+      const invites = await API.get('/api/invites');
+      const grid = document.getElementById('invitesGrid');
+      if (!invites.length) { grid.style.display = 'none'; return; }
+      grid.style.display = '';
+      grid.innerHTML = invites.map(inv => {
+        const schedPast = inv.is_scheduled && inv.scheduled_time && new Date(inv.scheduled_time) <= new Date();
+        const isLive = inv.is_active && (!inv.is_scheduled || schedPast);
+        const badge = inv.is_scheduled && !schedPast
+          ? `<span class="badge badge-sched">Scheduled</span>`
+          : isLive
+            ? `<span class="badge badge-live">● Live</span>`
+            : `<span class="badge badge-ended">Ended</span>`;
+        const schedTime = inv.is_scheduled && inv.scheduled_time && !schedPast
+          ? `<span class="sess-time">Scheduled: ${fmtDateTime(inv.scheduled_time)}</span>` : '';
+        return `
+          <div class="sess-card" onclick="openSession('${inv.code}')">
+            <div class="sess-code">${inv.code}</div>
+            <div class="sess-title">${esc(inv.title)}</div>
+            <div class="sess-meta">${badge}</div>
+            <div class="sess-meta" style="flex-direction:column;gap:4px;align-items:flex-start">
+              <span class="sess-time">From: <strong>${esc(inv.host_username)}</strong></span>
+              ${schedTime}
+            </div>
+          </div>`;
+      }).join('');
+    } catch {}
   }
 
   function filterSessions(filter, el) {
@@ -286,6 +321,7 @@
     document.getElementById('contactSearchBar').style.display  = isContacts ? '' : 'none';
     document.getElementById('sessionFilterTabs').style.display = isContacts ? 'none' : '';
     document.getElementById('sessionsHeader').style.display   = isContacts ? 'none' : '';
+    document.getElementById('invitesGrid').style.display     = isContacts ? 'none' : '';
     document.getElementById('sessionsGrid').style.display     = isContacts ? 'none' : '';
     document.getElementById('contactsPanel').style.display    = isContacts ? '' : 'none';
     if (isContacts) { loadContacts(); return; }
