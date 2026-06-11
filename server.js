@@ -390,7 +390,7 @@ app.get('/api/invites', authMiddleware, async (req, res) => {
     FROM invites i
     JOIN sessions s ON s.id = i.session_id
     JOIN users u ON u.id = s.host_id
-    WHERE LOWER(i.email)=LOWER($1) AND s.is_deleted IS DISTINCT FROM 1
+    WHERE LOWER(i.email)=LOWER($1)
     ORDER BY s.created_at DESC
   `, [email]);
   res.json(rows);
