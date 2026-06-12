@@ -57,15 +57,12 @@ a:hover { text-decoration: underline; }
 
 /* ── Nav ───────────────────────────────────────────────────────────────────── */
 nav {
-  background: linear-gradient(
-    to bottom,
-    var(--bg0) env(titlebar-area-y, 0px),
-    var(--nav-bg) env(titlebar-area-y, 0px)
-  );
+  /* Light mode: title bar blends seamlessly into nav (solid blue) */
+  background: var(--nav-bg);
   border-bottom: none;
   padding: 0 24px;
-  padding-top: env(titlebar-area-y, 0px);
-  height: calc(52px + env(titlebar-area-y, 0px));
+  padding-top: max(env(titlebar-area-y, 0px), env(safe-area-inset-top, 0px));
+  height: calc(52px + max(env(titlebar-area-y, 0px), env(safe-area-inset-top, 0px)));
   padding-left: max(24px, calc(env(titlebar-area-x, 0px) + 8px));
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 200;
@@ -553,7 +550,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 /* ── Contact chat view (full page) ─────────────────────────────────────────── */
 #contactChatView {
   position: fixed;
-  top: calc(52px + env(titlebar-area-y, 0px)); left: 0; right: 0; bottom: 0;
+  top: calc(52px + max(env(titlebar-area-y, 0px), env(safe-area-inset-top, 0px))); left: 0; right: 0; bottom: 0;
   background: var(--bg0);
   z-index: 100;
   display: flex; flex-direction: column;
@@ -782,4 +779,12 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .user-search-results { background: var(--bg2); border-color: #2a3550; }
   .user-search-result:hover { background: var(--bg3); }
 
+  /* Dark mode: title bar area contrasts with nav */
+  nav {
+    background: linear-gradient(
+      to bottom,
+      var(--bg0) max(env(titlebar-area-y, 0px), env(safe-area-inset-top, 0px)),
+      var(--nav-bg) max(env(titlebar-area-y, 0px), env(safe-area-inset-top, 0px))
+    );
+  }
 }
