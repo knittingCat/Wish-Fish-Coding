@@ -5,7 +5,6 @@ const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const path = require('path');
 
