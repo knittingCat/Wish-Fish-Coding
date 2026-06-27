@@ -52,10 +52,12 @@ function logout() {
   window.location.href = '/';
 }
 
-if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
-  const btn = document.getElementById('updateAppBtn');
-  if (btn) btn.style.display = '';
-}
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+    const btn = document.getElementById('updateAppBtn');
+    if (btn) btn.style.display = '';
+  }
+});
 
 async function updateApp() {
   const btn = document.getElementById('updateAppBtn');
