@@ -19,7 +19,6 @@
   <div class="nav-right">
     <span class="nav-user" id="navUser"></span>
     <button class="nav-notif-btn" id="navNotifBtn" style="display:none" onclick="switchTab('contacts', document.querySelector('[data-tab=contacts]'))" title="Contacts &amp; Messages"><span id="navNotifCount">0</span></button>
-    <button class="btn btn-ghost btn-sm" id="updateAppBtn" onclick="updateApp()" style="display:none">Update App</button>
     <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
   </div>
 </nav>
@@ -1055,5 +1054,7 @@
   loadNotifBadge();
   loadSessions();
 </script>
+
+<button id="updateAppBtn" class="update-gear-btn" onclick="updateApp()" title="Update App" style="display:none">⚙</button>
 </body>
 </html>

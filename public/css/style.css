@@ -453,6 +453,19 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   padding: 5px 13px; border-radius: 20px;
 }
 
+/* ── Update gear (PWA only) ─────────────────────────────────────────────────── */
+.update-gear-btn {
+  position: fixed; bottom: 16px; right: 16px; z-index: 900;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.7); border: 1px solid var(--border);
+  color: var(--txt3); font-size: 1.1rem; line-height: 1;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  display: flex; align-items: center; justify-content: center;
+  transition: color .15s, background .15s;
+}
+.update-gear-btn:hover { color: var(--txt2); background: #fff; }
+.update-gear-btn:disabled { opacity: 0.5; cursor: default; }
+
 /* Notification toast */
 .toast {
   position: fixed; bottom: 24px; right: 24px;

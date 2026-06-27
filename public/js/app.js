@@ -59,7 +59,7 @@ if (window.matchMedia('(display-mode: standalone)').matches || navigator.standal
 
 async function updateApp() {
   const btn = document.getElementById('updateAppBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '↻'; }
   try {
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.getRegistration();
