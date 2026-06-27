@@ -52,6 +52,20 @@ function logout() {
   window.location.href = '/';
 }
 
+async function updateApp() {
+  const btn = document.getElementById('updateAppBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch {}
+  window.location.reload(true);
+}
+
 // Toast notifications
 let _toastTimer;
 function toast(msg, type = '') {
