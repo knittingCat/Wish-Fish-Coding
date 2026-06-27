@@ -856,7 +856,7 @@ async function doJoin(socket, session, room, state) {
   );
 
   const peers = [...state.participants.values()].filter(p => p.socketId !== socket.id);
-  socket.emit('room-state', { peers, sharerIds: [...state.sharerIds], isLocked: state.isLocked, waitingRoomEnabled: state.waitingRoomEnabled });
+  socket.emit('room-state', { peers, sharerIds: [...state.sharerIds], isLocked: state.isLocked, waitingRoomEnabled: state.waitingRoomEnabled, controls: state.controls });
   io.to(room).emit('participants-update', [...state.participants.values()]);
   socket.to(room).emit('user-joined', { socketId: socket.id, username: socket.user.username });
 }
@@ -894,7 +894,12 @@ io.on('connection', (socket) => {
     }
 
     if (!roomState.has(room)) {
-      roomState.set(room, { participants: new Map(), sharerIds: new Set(), isLocked: false, audioParticipants: new Map(), waitingRoom: new Map(), waitingRoomEnabled: false });
+      roomState.set(room, {
+        participants: new Map(), sharerIds: new Set(), isLocked: false,
+        audioParticipants: new Map(), waitingRoom: new Map(), waitingRoomEnabled: false,
+        hostId: session.host_id,
+        controls: { audioJoin: true, audioUnmute: true, chat: true, viewChat: true, screenShare: true }
+      });
     }
     const state = roomState.get(room);
 
@@ -1042,10 +1047,29 @@ io.on('connection', (socket) => {
   });
 
   // ── Audio channel membership ─────────────────────────────────────────────
+  socket.on('set-controls', async (controls) => {
+    if (!await verifyHost(socket)) return;
+    const state = roomState.get(socket.sessionCode);
+    if (!state) return;
+    state.controls = {
+      audioJoin:   !!controls.audioJoin,
+      audioUnmute: !!controls.audioUnmute,
+      chat:        !!controls.chat,
+      viewChat:    !!controls.viewChat,
+      screenShare: !!controls.screenShare,
+    };
+    io.to(socket.sessionCode).emit('controls-update', state.controls);
+  });
+
   socket.on('audio-join', () => {
     if (!socket.sessionCode) return;
     const state = roomState.get(socket.sessionCode);
     if (!state || !state.participants.has(socket.id)) return;
+    const isHostUser = state.hostId === socket.user.id;
+    if (!isHostUser && !state.controls?.audioJoin) {
+      socket.emit('error', { message: 'Audio is disabled by the host.' });
+      return;
+    }
     const isSuspended = state.participants.get(socket.id)?.suspended || false;
     state.audioParticipants.set(socket.id, { socketId: socket.id, username: socket.user.username, muted: isSuspended });
     const peers = [...state.audioParticipants.values()].filter(p => p.socketId !== socket.id);
@@ -1066,8 +1090,10 @@ io.on('connection', (socket) => {
     const state = roomState.get(socket.sessionCode);
     const entry = state?.audioParticipants.get(socket.id);
     if (!entry) return;
-    // Suspended users cannot unmute
+    // Suspended users and participants when audioUnmute is off cannot unmute
+    const isHostUser = state.hostId === socket.user.id;
     if (!muted && state.participants.get(socket.id)?.suspended) return;
+    if (!muted && !isHostUser && !state.controls?.audioUnmute) return;
     entry.muted = !!muted;
     io.to(socket.sessionCode).emit('audio-user-muted', { socketId: socket.id, muted: entry.muted });
   });

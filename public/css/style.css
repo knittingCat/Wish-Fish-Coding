@@ -397,6 +397,40 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .p-suspended{ font-size: 0.68rem; color: var(--txt3);  font-weight: 700; }
 .p-flagged  { font-size: 0.68rem; color: var(--err);   font-weight: 700; }
 
+/* ── Controls panel ────────────────────────────────────────────────────────── */
+.controls-panel { display: flex; flex-direction: column; overflow-y: auto; flex: 1; }
+.ctrl-section { border-bottom: 1px solid var(--border); }
+.ctrl-section:last-child { border-bottom: none; }
+.ctrl-section-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px; background: none; border: none; cursor: pointer;
+  color: var(--txt2); font-size: 0.78rem; font-weight: 800; letter-spacing: .07em;
+  text-transform: uppercase; font-family: inherit;
+}
+.ctrl-section-head:hover { background: var(--bg3); }
+.ctrl-chevron { font-size: 0.7rem; transition: transform .2s; color: var(--txt3); }
+.ctrl-section.collapsed .ctrl-chevron { transform: rotate(-90deg); }
+.ctrl-section-body { padding: 2px 0 8px; }
+.ctrl-section.collapsed .ctrl-section-body { display: none; }
+.ctrl-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; cursor: pointer; gap: 12px; user-select: none;
+}
+.ctrl-row:hover { background: var(--bg3); }
+.ctrl-label { font-size: 0.84rem; color: var(--txt1); flex: 1; line-height: 1.35; }
+.ctrl-toggle { display: none; }
+.ctrl-pill {
+  flex-shrink: 0; width: 42px; height: 24px; border-radius: 12px;
+  background: var(--bg4); transition: background .2s; position: relative;
+}
+.ctrl-pill::after {
+  content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; top: 3px; left: 3px; transition: transform .2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+.ctrl-toggle:checked ~ .ctrl-pill { background: var(--accent); }
+.ctrl-toggle:checked ~ .ctrl-pill::after { transform: translateX(18px); }
+
 /* Waiting room section */
 .waiting-section { border-bottom: 1px solid var(--border); padding: 10px 12px; background: rgba(74,159,213,.06); }
 .waiting-section-head { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
@@ -786,6 +820,10 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 
   .update-gear-btn { background: var(--bg2); border-color: #2a3550; }
   .update-gear-btn:hover { background: var(--bg3); }
+
+  .ctrl-section-head:hover { background: var(--bg3); }
+  .ctrl-row:hover { background: var(--bg3); }
+  .ctrl-pill { background: var(--bg4); }
 
   .contact-card { background: var(--bg1); border-color: #2a3550; }
   .contact-card-link:hover { border-color: var(--accent); }

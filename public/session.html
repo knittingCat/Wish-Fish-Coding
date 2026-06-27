@@ -77,10 +77,11 @@
   <!-- Sidebar -->
   <div class="session-sidebar">
     <div class="sidebar-tabs">
-      <button class="sidebar-tab active" onclick="sideTab('chat', this)">Chat</button>
+      <button class="sidebar-tab active" id="tab-chat" onclick="sideTab('chat', this)">Chat</button>
       <button class="sidebar-tab" onclick="sideTab('people', this)">People</button>
       <button class="sidebar-tab" onclick="sideTab('invite', this)">Invite</button>
-      <button class="sidebar-tab" onclick="sideTab('audio', this)">Audio</button>
+      <button class="sidebar-tab" id="tab-audio" onclick="sideTab('audio', this)">Audio</button>
+      <button class="sidebar-tab" id="tab-controls" style="display:none" onclick="sideTab('controls', this)">Controls</button>
     </div>
 
     <!-- Chat panel -->
@@ -112,6 +113,51 @@
           <div class="audio-participants-list" id="audioParticipantsList"></div>
           <div class="audio-leave-bar">
             <button class="btn btn-danger btn-full btn-sm" onclick="leaveAudio()">Leave Audio</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls panel (host only) -->
+    <div class="sidebar-panel" id="panel-controls">
+      <div class="controls-panel">
+        <div class="ctrl-section" id="ctrlSectionAudio">
+          <button class="ctrl-section-head" onclick="toggleCtrlSection('ctrlSectionAudio')">
+            <span>Audio</span><span class="ctrl-chevron">▾</span>
+          </button>
+          <div class="ctrl-section-body">
+            <label class="ctrl-row">
+              <span class="ctrl-label">Participants can join audio</span>
+              <input type="checkbox" class="ctrl-toggle" id="ctrl-audioJoin" checked onchange="onControlChange()">
+              <span class="ctrl-pill"></span>
+            </label>
+            <label class="ctrl-row">
+              <span class="ctrl-label">Participants can unmute themselves</span>
+              <input type="checkbox" class="ctrl-toggle" id="ctrl-audioUnmute" checked onchange="onControlChange()">
+              <span class="ctrl-pill"></span>
+            </label>
+          </div>
+        </div>
+        <div class="ctrl-section" id="ctrlSectionVisual">
+          <button class="ctrl-section-head" onclick="toggleCtrlSection('ctrlSectionVisual')">
+            <span>Visual</span><span class="ctrl-chevron">▾</span>
+          </button>
+          <div class="ctrl-section-body">
+            <label class="ctrl-row">
+              <span class="ctrl-label">Participants can chat</span>
+              <input type="checkbox" class="ctrl-toggle" id="ctrl-chat" checked onchange="onControlChange()">
+              <span class="ctrl-pill"></span>
+            </label>
+            <label class="ctrl-row">
+              <span class="ctrl-label">Participants can view the chat</span>
+              <input type="checkbox" class="ctrl-toggle" id="ctrl-viewChat" checked onchange="onControlChange()">
+              <span class="ctrl-pill"></span>
+            </label>
+            <label class="ctrl-row">
+              <span class="ctrl-label">Participants can screen share</span>
+              <input type="checkbox" class="ctrl-toggle" id="ctrl-screenShare" checked onchange="onControlChange()">
+              <span class="ctrl-pill"></span>
+            </label>
           </div>
         </div>
       </div>
@@ -185,6 +231,7 @@
   let isLocked = false;
   let waitingRoomEnabled = false;
   let lastParticipants = [];
+  let sessionControls = { audioJoin: true, audioUnmute: true, chat: true, viewChat: true, screenShare: true };
 
   function updateLockUI() {
     document.getElementById('lockedIndicator').style.display = isLocked ? 'flex' : 'none';
@@ -407,10 +454,13 @@
     const joinArea   = document.getElementById('audioJoinArea');
     const activeArea = document.getElementById('audioActiveArea');
     const muteBtn    = document.getElementById('muteBtn');
+    const joinBtn    = document.getElementById('audioJoinBtn');
+    if (!isHost && joinBtn) joinBtn.style.display = sessionControls.audioJoin ? '' : 'none';
     if (isInAudio) {
       joinArea.style.display   = 'none';
       activeArea.style.display = '';
-      if (!isSuspended) muteBtn.style.display = '';
+      const canMute = !isSuspended && (isHost || sessionControls.audioUnmute);
+      muteBtn.style.display = canMute ? '' : 'none';
     } else {
       joinArea.style.display   = '';
       activeArea.style.display = 'none';
@@ -447,6 +497,7 @@
       document.getElementById('endBtn').style.display = isHost ? '' : 'none';
       document.getElementById('lockBtn').style.display = isHost ? '' : 'none';
       document.getElementById('waitingRoomBtn').style.display = isHost ? '' : 'none';
+      document.getElementById('tab-controls').style.display = isHost ? '' : 'none';
 
       // Load chat history
       for (const msg of sessionData.messages) {
@@ -471,7 +522,7 @@
       toast(`Connection error: ${err.message}`, 'err');
     });
 
-    socket.on('room-state', ({ peers, sharerIds, isLocked: locked, waitingRoomEnabled: wrEnabled }) => {
+    socket.on('room-state', ({ peers, sharerIds, isLocked: locked, waitingRoomEnabled: wrEnabled, controls }) => {
       document.getElementById('sessionGate').style.display = 'none';
       renderParticipants(peers.concat([{ socketId: socket.id, username: ME }]));
       for (const sid of sharerIds || []) {
@@ -481,6 +532,12 @@
       updateLockUI();
       waitingRoomEnabled = wrEnabled || false;
       updateWaitingRoomBtn();
+      if (controls) applyControls(controls);
+    });
+
+    socket.on('controls-update', (controls) => {
+      if (isHost) syncControlsUI(controls);
+      applyControls(controls);
     });
 
     socket.on('participants-update', users => {
@@ -524,6 +581,8 @@
       document.getElementById('endBtn').style.display         = isHost ? '' : 'none';
       document.getElementById('lockBtn').style.display        = isHost ? '' : 'none';
       document.getElementById('waitingRoomBtn').style.display = isHost ? '' : 'none';
+      document.getElementById('tab-controls').style.display   = isHost ? '' : 'none';
+      if (!isHost) applyControls(sessionControls);
       renderParticipants(lastParticipants);
       appendSystemMsg(isHost ? 'You are now the host.' : `${newHostUsername} is now the host.`);
     });
@@ -993,6 +1052,64 @@
   // ── Copy code ──────────────────────────────────────────────────────────────
   function copyCode() {
     navigator.clipboard.writeText(CODE).then(() => toast('Code copied!', 'ok'));
+  }
+
+  // ── Session controls (host only) ───────────────────────────────────────────
+  function applyControls(controls) {
+    sessionControls = controls;
+    if (isHost) return;
+
+    // Audio: join
+    const joinBtn = document.getElementById('audioJoinBtn');
+    if (joinBtn) joinBtn.style.display = controls.audioJoin ? '' : 'none';
+
+    // Audio: unmute — force mute if currently unmuted
+    if (!controls.audioUnmute && isInAudio && !isMuted) {
+      isMuted = true;
+      if (audioStream) audioStream.getAudioTracks().forEach(t => { t.enabled = false; });
+      if (socket) socket.emit('audio-mute', { muted: true });
+    }
+    updateAudioUI();
+
+    // Visual: chat input
+    document.querySelector('.chat-input-row').style.display = controls.chat ? '' : 'none';
+
+    // Visual: chat tab — if hidden and active, switch to people
+    const chatTab = document.getElementById('tab-chat');
+    if (chatTab) {
+      chatTab.style.display = controls.viewChat ? '' : 'none';
+      if (!controls.viewChat && document.getElementById('panel-chat').classList.contains('active')) {
+        sideTab('people', document.querySelector('.sidebar-tab[onclick*="people"]'));
+      }
+    }
+
+    // Visual: screen share button
+    const shareBtn = document.getElementById('shareBtn');
+    if (shareBtn) shareBtn.style.display = controls.screenShare ? '' : 'none';
+    if (!controls.screenShare && isSharing) stopSharing();
+  }
+
+  function syncControlsUI(controls) {
+    document.getElementById('ctrl-audioJoin').checked   = controls.audioJoin;
+    document.getElementById('ctrl-audioUnmute').checked = controls.audioUnmute;
+    document.getElementById('ctrl-chat').checked        = controls.chat;
+    document.getElementById('ctrl-viewChat').checked    = controls.viewChat;
+    document.getElementById('ctrl-screenShare').checked = controls.screenShare;
+  }
+
+  function onControlChange() {
+    const controls = {
+      audioJoin:   document.getElementById('ctrl-audioJoin').checked,
+      audioUnmute: document.getElementById('ctrl-audioUnmute').checked,
+      chat:        document.getElementById('ctrl-chat').checked,
+      viewChat:    document.getElementById('ctrl-viewChat').checked,
+      screenShare: document.getElementById('ctrl-screenShare').checked,
+    };
+    if (socket) socket.emit('set-controls', controls);
+  }
+
+  function toggleCtrlSection(id) {
+    document.getElementById(id).classList.toggle('collapsed');
   }
 
   // ── Sidebar tabs ───────────────────────────────────────────────────────────
