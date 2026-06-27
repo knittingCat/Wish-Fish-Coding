@@ -53,7 +53,10 @@ function logout() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+  const isPWA = ['standalone', 'window-controls-overlay', 'fullscreen'].some(m =>
+    window.matchMedia(`(display-mode: ${m})`).matches
+  ) || navigator.standalone;
+  if (isPWA) {
     const btn = document.getElementById('updateAppBtn');
     if (btn) btn.style.display = '';
   }

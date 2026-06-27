@@ -57,18 +57,22 @@ a:hover { text-decoration: underline; }
 
 /* ── Nav ───────────────────────────────────────────────────────────────────── */
 nav {
-  /* Light mode: title bar blends seamlessly into nav (solid blue) */
   background: var(--nav-bg);
   border-bottom: none;
-  padding: 0 24px;
   padding-top: max(env(titlebar-area-height, 0px), env(safe-area-inset-top, 0px));
-  height: calc(52px + max(env(titlebar-area-height, 0px), env(safe-area-inset-top, 0px)));
-  padding-left: max(24px, calc(env(titlebar-area-x, 0px) + 8px));
-  display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 200;
   box-shadow: 0 2px 8px rgba(0,0,0,.15);
   -webkit-app-region: drag;
   app-region: drag;
+}
+.nav-inner {
+  max-width: calc(1100px + 48px);
+  margin: 0 auto;
+  padding: 0 24px;
+  padding-left: max(24px, calc(env(titlebar-area-x, 0px) + 8px));
+  height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%;
 }
 nav .brand span { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
 nav .brand .fish { color: #ffffff; }
