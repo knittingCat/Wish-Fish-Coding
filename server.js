@@ -19,7 +19,10 @@ const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 // ── Database ──────────────────────────────────────────────────────────────────
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  max: 3,
+  idleTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
 });
 
 async function initDb() {
@@ -1188,10 +1191,11 @@ const REMINDER_OPTS = {
   '1h':  { ms: 3600000, col: 'reminder_1h_sent',  label: 'in 1 hour' },
 };
 
-cron.schedule('* * * * *', async () => {
-  const now = Date.now();
-  const win = 90 * 1000;
+let burstInterval = null;
+let burstUntil = 0;
 
+async function runCheck(win) {
+  const now = Date.now();
   async function checkReminders(opt) {
     const { ms, col, label } = REMINDER_OPTS[opt];
     const lo = new Date(now + ms - win).toISOString();
@@ -1212,14 +1216,33 @@ cron.schedule('* * * * *', async () => {
       await pool.query(`UPDATE invites SET ${col}=1 WHERE id=$1`, [r.id]);
     }
   }
+  for (const opt of Object.keys(REMINDER_OPTS)) await checkReminders(opt);
+  await pool.query(
+    `UPDATE sessions SET is_scheduled=0 WHERE is_scheduled=1 AND is_active=1 AND scheduled_time <= $1`,
+    [new Date(now).toISOString()]
+  );
+}
 
+cron.schedule('*/5 * * * *', async () => {
   try {
-    for (const opt of Object.keys(REMINDER_OPTS)) await checkReminders(opt);
-    // Auto-activate scheduled sessions whose time has passed
-    await pool.query(`
-      UPDATE sessions SET is_scheduled=0
-      WHERE is_scheduled=1 AND is_active=1 AND scheduled_time <= $1
-    `, [new Date(now).toISOString()]);
+    // Wide window (3 min) so nothing falls between 5-min ticks
+    await runCheck(3 * 60 * 1000);
+
+    // If a session starts within the next 10 min, burst-check every second for 5 min
+    const lo = new Date().toISOString();
+    const hi = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const { rows } = await pool.query(
+      `SELECT 1 FROM sessions WHERE is_scheduled=1 AND is_active=1 AND scheduled_time BETWEEN $1 AND $2 LIMIT 1`,
+      [lo, hi]
+    );
+    if (rows.length > 0 && Date.now() >= burstUntil) {
+      burstUntil = Date.now() + 5 * 60 * 1000;
+      clearInterval(burstInterval);
+      burstInterval = setInterval(async () => {
+        if (Date.now() >= burstUntil) { clearInterval(burstInterval); burstInterval = null; return; }
+        try { await runCheck(2000); } catch (err) { console.error('[Burst]', err.message); }
+      }, 1000);
+    }
   } catch (err) {
     console.error('[Cron error]', err.message);
   }
