@@ -429,9 +429,9 @@ app.get('/api/invites', authMiddleware, async (req, res) => {
     FROM invites i
     JOIN sessions s ON s.id = i.session_id
     JOIN users u ON u.id = s.host_id
-    WHERE LOWER(i.email)=LOWER($1)
+    WHERE LOWER(i.email)=LOWER($1) AND s.host_id != $2
     ORDER BY s.created_at DESC
-  `, [email]);
+  `, [email, req.user.id]);
   res.json(rows);
 });
 
