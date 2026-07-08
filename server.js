@@ -594,6 +594,20 @@ app.post('/api/contacts/:id/cancel', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+app.delete('/api/contacts/:id', authMiddleware, async (req, res) => {
+  const uid = req.user.id;
+  const contact = await pool.query(
+    `SELECT * FROM contacts WHERE id=$1 AND (requester_id=$2 OR addressee_id=$2) AND status='accepted'`,
+    [req.params.id, uid]
+  );
+  if (!contact.rows.length) return res.status(404).json({ error: 'Contact not found' });
+  await pool.query('DELETE FROM contact_messages WHERE contact_id=$1', [req.params.id]);
+  await pool.query('DELETE FROM contacts WHERE id=$1', [req.params.id]);
+  const otherId = contact.rows[0].requester_id === uid ? contact.rows[0].addressee_id : contact.rows[0].requester_id;
+  io.to(`user-${otherId}`).emit('contact-removed', { contactId: parseInt(req.params.id) });
+  res.json({ success: true });
+});
+
 app.get('/api/contacts/:id/messages', authMiddleware, async (req, res) => {
   const uid = req.user.id;
   const contact = await pool.query(

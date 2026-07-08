@@ -758,8 +758,11 @@
     document.getElementById('contactsEmpty').style.display = (!pending.length && !outgoing.length && !accepted.length) ? '' : 'none';
     document.getElementById('acceptedList').innerHTML = accepted.map(c => `
       <div class="contact-card contact-card-link" onclick="openChat(${c.id},'${esc(c.otherUsername)}','contact')">
-        <div class="contact-card-name">${esc(c.otherUsername)}${c.unreadCount > 0 ? `<span class="contact-unread">${c.unreadCount}</span>` : ''}</div>
-        ${c.lastMessage ? `<div class="contact-last-msg">${esc(c.lastMessage)}</div>` : ''}
+        <div style="flex:1;min-width:0">
+          <div class="contact-card-name">${esc(c.otherUsername)}${c.unreadCount > 0 ? `<span class="contact-unread">${c.unreadCount}</span>` : ''}</div>
+          ${c.lastMessage ? `<div class="contact-last-msg">${esc(c.lastMessage)}</div>` : ''}
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); removeContact(${c.id}, '${esc(c.otherUsername)}')">Remove</button>
       </div>`).join('');
   }
 
@@ -818,6 +821,11 @@
   }
   async function cancelContact(id) {
     try { await API.post(`/api/contacts/${id}/cancel`, {}); toast('Request cancelled.', 'ok'); loadContacts(); }
+    catch (err) { toast(err.message, 'err'); }
+  }
+  async function removeContact(id, username) {
+    if (!confirm(`Remove ${username} from your contacts? This cannot be undone.`)) return;
+    try { await API.delete(`/api/contacts/${id}`); toast('Contact removed.', 'ok'); loadContacts(); }
     catch (err) { toast(err.message, 'err'); }
   }
 
@@ -1022,6 +1030,10 @@
   });
   dashSocket.on('contact-request-accepted', ({ by }) => {
     toast(`${by.username} accepted your contact request!`, 'ok');
+    if (currentTab === 'contacts') loadContacts();
+  });
+  dashSocket.on('contact-removed', ({ contactId }) => {
+    if (activeChatType === 'contact' && activeChatId === contactId) showContactList();
     if (currentTab === 'contacts') loadContacts();
   });
   dashSocket.on('new-contact-message', ({ contactId, message }) => {
