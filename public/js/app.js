@@ -10,6 +10,11 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
+// Suppress the browser's native "install app" prompt/icon in the address bar
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+});
+
 // Shared utilities — included on every page
 
 const API = {
