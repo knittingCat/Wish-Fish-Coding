@@ -17,8 +17,17 @@ const PORT = process.env.PORT || 3000;
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
 // ── Database ──────────────────────────────────────────────────────────────────
+// Strip sslmode from the connection string so pg-connection-string doesn't apply its
+// deprecated sslmode->ssl-object aliasing; the explicit `ssl` option below is authoritative.
+function stripSslMode(url) {
+  if (!url) return url;
+  const u = new URL(url);
+  u.searchParams.delete('sslmode');
+  return u.toString();
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: stripSslMode(process.env.DATABASE_URL),
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
   max: 3,
   idleTimeoutMillis: 5000,
