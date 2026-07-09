@@ -230,13 +230,16 @@ function inviteEmailHtml(title, code, scheduledTime, isReminder, reminderText, t
 }
 
 function contactEmailHtml(type, fromUsername) {
-  const isRequest = type === 'request';
-  const heading = isRequest
+  const heading = type === 'request'
     ? `${fromUsername} sent you a contact request`
-    : `${fromUsername} accepted your contact request!`;
-  const body = isRequest
+    : type === 'accepted'
+      ? `${fromUsername} accepted your contact request!`
+      : `${fromUsername} removed you as a contact`;
+  const body = type === 'request'
     ? `<p style="color:#555;margin-bottom:24px">${fromUsername} wants to connect with you on Wish Fish Coding. Log in to accept or decline.</p>`
-    : `<p style="color:#555;margin-bottom:24px">You and ${fromUsername} are now contacts on Wish Fish Coding. Open your dashboard to start chatting.</p>`;
+    : type === 'accepted'
+      ? `<p style="color:#555;margin-bottom:24px">You and ${fromUsername} are now contacts on Wish Fish Coding. Open your dashboard to start chatting.</p>`
+      : `<p style="color:#555;margin-bottom:24px">${fromUsername} has removed you from their contacts on Wish Fish Coding.</p>`;
   return emailShell('', `
   <h2 style="margin-bottom:16px">${heading}</h2>
   ${body}
@@ -605,6 +608,13 @@ app.delete('/api/contacts/:id', authMiddleware, async (req, res) => {
   await pool.query('DELETE FROM contacts WHERE id=$1', [req.params.id]);
   const otherId = contact.rows[0].requester_id === uid ? contact.rows[0].addressee_id : contact.rows[0].requester_id;
   io.to(`user-${otherId}`).emit('contact-removed', { contactId: parseInt(req.params.id) });
+  const [me, otherRes] = await Promise.all([
+    pool.query('SELECT username FROM users WHERE id=$1', [uid]),
+    pool.query('SELECT email FROM users WHERE id=$1', [otherId])
+  ]);
+  if (otherRes.rows[0]?.email) {
+    sendEmail(otherRes.rows[0].email, `${me.rows[0]?.username} removed you as a contact`, contactEmailHtml('removed', me.rows[0]?.username));
+  }
   res.json({ success: true });
 });
 
