@@ -857,6 +857,21 @@ app.delete('/api/group-chats/:id/members/:userId', authMiddleware, async (req, r
   const isSelf = parseInt(req.params.userId) === req.user.id;
   if (!isCreator && !isSelf) return res.status(403).json({ error: 'Not authorized' });
   await pool.query('DELETE FROM group_chat_members WHERE group_id=$1 AND user_id=$2', [req.params.id, req.params.userId]);
+  if (!isSelf) {
+    const [groupRes, removerRes, removedRes] = await Promise.all([
+      pool.query('SELECT name FROM group_chats WHERE id=$1', [req.params.id]),
+      pool.query('SELECT username FROM users WHERE id=$1', [req.user.id]),
+      pool.query('SELECT email FROM users WHERE id=$1', [req.params.userId])
+    ]);
+    if (removedRes.rows[0]?.email) {
+      const groupName = groupRes.rows[0]?.name;
+      const removerUsername = removerRes.rows[0]?.username;
+      sendEmail(removedRes.rows[0].email, `You were removed from "${groupName}"`, emailShell('', `
+        <h2 style="margin-bottom:16px">You were removed from "${groupName}"</h2>
+        <p style="color:#555;margin-bottom:24px">${removerUsername} removed you from the group chat "${groupName}" on Wish Fish Coding.</p>
+        <a class="btn" href="${APP_URL}/dashboard?tab=contacts">Open Contacts</a>`));
+    }
+  }
   res.json({ success: true });
 });
 
