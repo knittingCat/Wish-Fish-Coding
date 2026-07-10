@@ -6,14 +6,11 @@ if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
   localStorage.removeItem('username');
 }
 
+// Unregister any service worker from previous PWA support so old installs stop being controlled by it
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(reg => reg.unregister()));
+  if (window.caches) caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
 }
-
-// Suppress the browser's native "install app" prompt/icon in the address bar
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-});
 
 // Shared utilities — included on every page
 
@@ -52,30 +49,6 @@ function logout() {
   sessionStorage.removeItem('token');
   sessionStorage.removeItem('username');
   window.location.href = '/';
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const isPWA = ['standalone', 'window-controls-overlay', 'fullscreen'].some(m =>
-    window.matchMedia(`(display-mode: ${m})`).matches
-  ) || navigator.standalone;
-  if (isPWA) {
-    const btn = document.getElementById('updateAppBtn');
-    if (btn) btn.style.display = '';
-  }
-});
-
-async function updateApp() {
-  const btn = document.getElementById('updateAppBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '↻'; }
-  try {
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) await reg.update();
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-  } catch {}
-  window.location.reload(true);
 }
 
 // Toast notifications
