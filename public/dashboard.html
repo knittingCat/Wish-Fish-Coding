@@ -56,8 +56,6 @@
     <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Session</button>
   </div>
 
-  <div id="invitesGrid" class="sessions-grid" style="display:none;margin-bottom:28px"></div>
-
   <div id="sessionsGrid" class="sessions-grid"></div>
 
   <!-- Contacts panel -->
@@ -324,6 +322,7 @@
   document.getElementById('navUser').textContent = getUsername() || '';
 
   let allSessions = [];
+  let allInvites = [];
   let currentTab = 'sessions';
   let sessionFilter = 'all';
   let inviteTarget = null;
@@ -334,44 +333,16 @@
   // ── Load sessions ──────────────────────────────────────────────────────────
   async function loadSessions() {
     try {
-      [allSessions] = await Promise.all([
+      const [sessions, invites] = await Promise.all([
         API.get('/api/sessions'),
-        loadInvites()
+        API.get('/api/invites').catch(() => [])
       ]);
+      allSessions = sessions;
+      allInvites = invites;
       renderSessions();
     } catch (err) {
       if (err.message.includes('Invalid token') || err.message.includes('No token')) logout();
     }
-  }
-
-  async function loadInvites() {
-    try {
-      const invites = await API.get('/api/invites');
-      const grid = document.getElementById('invitesGrid');
-      if (!invites.length) { grid.style.display = 'none'; return; }
-      grid.style.display = '';
-      grid.innerHTML = invites.map(inv => {
-        const schedPast = inv.is_scheduled && inv.scheduled_time && new Date(inv.scheduled_time) <= new Date();
-        const isLive = inv.is_active && (!inv.is_scheduled || schedPast);
-        const badge = inv.is_scheduled && !schedPast
-          ? `<span class="badge badge-sched">Scheduled</span>`
-          : isLive
-            ? `<span class="badge badge-live">● Live</span>`
-            : `<span class="badge badge-ended">Ended</span>`;
-        const schedTime = inv.is_scheduled && inv.scheduled_time && !schedPast
-          ? `<span class="sess-time">Scheduled: ${fmtDateTime(inv.scheduled_time)}</span>` : '';
-        return `
-          <div class="sess-card" onclick="openSession('${inv.code}')">
-            <div class="sess-code">${inv.code}</div>
-            <div class="sess-title">${esc(inv.title)}</div>
-            <div class="sess-meta">${badge}</div>
-            <div class="sess-meta" style="flex-direction:column;gap:4px;align-items:flex-start">
-              <span class="sess-time">From: <strong>${esc(inv.host_username)}</strong></span>
-              ${schedTime}
-            </div>
-          </div>`;
-      }).join('');
-    } catch {}
   }
 
   function filterSessions(filter, el) {
@@ -385,13 +356,15 @@
 
   function renderSessions() {
     const grid = document.getElementById('sessionsGrid');
-    let list = allSessions;
-    if (sessionFilter === 'live')      list = list.filter(s => s.is_active && (!s.is_scheduled || new Date(s.scheduled_time) <= new Date()));
-    if (sessionFilter === 'scheduled') list = list.filter(s => s.is_scheduled && new Date(s.scheduled_time) > new Date());
+    let items = [
+      ...allSessions.map(s => ({ ...s, kind: 'own' })),
+      ...allInvites.map(i => ({ ...i, kind: 'invite' }))
+    ];
+    if (sessionFilter === 'live')      items = items.filter(s => s.is_active && (!s.is_scheduled || new Date(s.scheduled_time) <= new Date()));
+    if (sessionFilter === 'scheduled') items = items.filter(s => s.is_scheduled && new Date(s.scheduled_time) > new Date());
 
-    if (!list.length) {
-      const hasInvites = document.getElementById('invitesGrid').children.length > 0;
-      grid.innerHTML = hasInvites ? '' : `<div class="empty-state" style="grid-column:1/-1">
+    if (!items.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
         <div class="empty-icon"></div>
         <h3>No sessions yet</h3>
         <p>Create a new session or join one with a code.</p>
@@ -399,7 +372,7 @@
       return;
     }
 
-    grid.innerHTML = list.map(s => {
+    grid.innerHTML = items.map(s => {
       const schedPast = s.is_scheduled && s.scheduled_time && new Date(s.scheduled_time) <= new Date();
       const isLive = s.is_active && (!s.is_scheduled || schedPast);
       const badge = (s.is_scheduled && !schedPast)
@@ -409,6 +382,20 @@
           : `<span class="badge badge-ended">Ended</span>`;
       const schedTime = s.is_scheduled && s.scheduled_time && !schedPast
         ? `<span class="sess-time">Scheduled: ${fmtDateTime(s.scheduled_time)}</span>` : '';
+
+      if (s.kind === 'invite') {
+        return `
+          <div class="sess-card" onclick="openSession('${s.code}')">
+            <div class="sess-code">${s.code}</div>
+            <div class="sess-title">${esc(s.title)}</div>
+            <div class="sess-meta">${badge}</div>
+            <div class="sess-meta" style="flex-direction:column;gap:4px;align-items:flex-start">
+              <span class="sess-time">From: <strong>${esc(s.host_username)}</strong></span>
+              ${schedTime}
+            </div>
+          </div>`;
+      }
+
       const createdTime = `<span class="sess-time">Created: ${fmtDateTime(s.created_at)}</span>`;
       return `
         <div class="sess-card" onclick="openSession('${s.code}')">
@@ -441,7 +428,6 @@
     document.getElementById('contactSearchBar').style.display  = isContacts ? '' : 'none';
     document.getElementById('sessionFilterTabs').style.display = isContacts ? 'none' : '';
     document.getElementById('sessionsHeader').style.display   = isContacts ? 'none' : '';
-    document.getElementById('invitesGrid').style.display     = isContacts ? 'none' : '';
     document.getElementById('sessionsGrid').style.display     = isContacts ? 'none' : '';
     document.getElementById('contactsPanel').style.display    = isContacts ? '' : 'none';
     if (isContacts) { loadContacts(); return; }
