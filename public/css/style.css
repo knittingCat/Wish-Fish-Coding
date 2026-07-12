@@ -63,8 +63,6 @@ nav {
   box-shadow: 0 2px 8px rgba(0,0,0,.15);
 }
 .nav-inner {
-  max-width: calc(1100px + 48px);
-  margin: 0 auto;
   padding: 0 24px;
   height: 52px;
   display: flex; align-items: center; justify-content: space-between;
@@ -156,7 +154,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .auth-divider::before, .auth-divider::after { content:''; flex:1; height:1px; background: var(--border); }
 
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
-.dash-wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+.dash-wrap { padding: 28px 24px; }
 .page-title { font-size: 1.45rem; font-weight: 800; margin-bottom: 24px; }
 
 .join-bar {
