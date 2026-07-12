@@ -899,14 +899,10 @@
   function appendChatMsg(username, content, timestamp) {
     const el = document.getElementById('chatMessages');
     const div = document.createElement('div');
-    div.className = 'chat-msg';
     const isMe = username === ME;
-    div.innerHTML = `
-      <div class="msg-meta">
-        <span class="msg-user${isMe ? ' me' : ''}">${esc(username)}</span>
-        <span class="msg-time">${fmtChatTime(timestamp)}</span>
-      </div>
-      <div class="msg-body">${esc(content)}</div>`;
+    div.className = 'contact-msg' + (isMe ? ' contact-msg-me' : '');
+    const displayName = isMe ? 'You' : esc(username);
+    div.innerHTML = `<div class="contact-msg-meta">${displayName} · ${fmtChatTime(timestamp)}</div><div class="contact-msg-body">${esc(content)}</div>`;
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
   }
