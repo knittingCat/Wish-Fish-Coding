@@ -89,9 +89,6 @@
 
       <!-- Groups sub-view -->
       <div id="contactsGroupsView" style="display:none">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-          <button class="btn btn-primary btn-sm" onclick="openNewGroupModal()">+ New Group</button>
-        </div>
         <div id="groupsList"></div>
         <div class="empty-state" id="groupsEmpty" style="display:none">
           <h3>No group chats yet</h3>
@@ -806,13 +803,16 @@
           </div>
         </div>`).join('')}
     ` : '';
-    el.innerHTML = invitesHtml + groups.map(g => `
-      <div class="contact-card contact-card-link" onclick="openChat(${g.id},'${esc(g.name)}','group')">
-        <div style="flex:1;min-width:0">
-          <div class="contact-card-name">${esc(g.name)}${g.unreadCount > 0 ? `<span class="contact-unread">${g.unreadCount}</span>` : ''}</div>
-          ${g.lastMessage ? `<div class="contact-last-msg">${esc(g.lastMessage)}</div>` : ''}
-        </div>
-      </div>`).join('');
+    el.innerHTML = invitesHtml + `<div class="groups-row">
+      <button class="group-new-btn" onclick="openNewGroupModal()">+ New Group</button>
+      ${groups.map(g => `
+        <div class="contact-card contact-card-link" onclick="openChat(${g.id},'${esc(g.name)}','group')">
+          <div style="flex:1;min-width:0">
+            <div class="contact-card-name">${esc(g.name)}${g.unreadCount > 0 ? `<span class="contact-unread">${g.unreadCount}</span>` : ''}</div>
+            ${g.lastMessage ? `<div class="contact-last-msg">${esc(g.lastMessage)}</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`;
   }
 
   async function acceptGroupInvite(inviteId) {
