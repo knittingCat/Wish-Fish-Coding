@@ -660,24 +660,6 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .dash-wrap { padding: 16px; }
 }
 
-/* Sharing indicator */
-.sharing-indicator {
-  display: none;
-  align-items: center; gap: 7px;
-  color: #ff4d6d; font-size: 0.76rem; font-weight: 800; letter-spacing: .06em;
-  background: rgba(255,77,109,.1); border: 1px solid rgba(255,77,109,.35);
-  padding: 5px 13px; border-radius: 20px;
-}
-.rec-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #ff4d6d; flex-shrink: 0;
-  animation: pulse-rec 1.1s ease-in-out infinite;
-}
-@keyframes pulse-rec {
-  0%,100% { opacity:1; transform:scale(1); }
-  50%      { opacity:.3; transform:scale(.7); }
-}
-
 /* Spinner */
 .spinner {
   width: 18px; height: 18px;

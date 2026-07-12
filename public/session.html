@@ -45,9 +45,6 @@
         <div class="toolbar-title" id="sessionTitle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
       </div>
       <div class="toolbar-actions">
-        <div class="sharing-indicator" id="sharingIndicator">
-          <span class="rec-dot"></span> SHARING
-        </div>
         <button class="btn btn-secondary btn-sm" id="muteBtn" style="display:none" onclick="toggleMute()">Mute</button>
         <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
           Share Screen
@@ -870,7 +867,6 @@
     btn.disabled = false;
     btn.innerHTML = 'Stop Sharing';
     btn.className = 'btn btn-danger btn-sm';
-    document.getElementById('sharingIndicator').style.display = 'flex';
 
     // Show own screen locally as a tile
     addVideoTile('local', ME, localStream);
@@ -894,7 +890,6 @@
     btn.innerHTML = 'Share Screen';
     btn.className = 'btn btn-secondary btn-sm';
     btn.disabled = false;
-    document.getElementById('sharingIndicator').style.display = 'none';
     removeVideoTile('local');
 
     socket.emit('screen-share-stop');
