@@ -369,7 +369,7 @@
 
     if (!list.length) {
       const hasInvites = document.getElementById('invitesGrid').children.length > 0;
-      grid.innerHTML = hasInvites ? '' : `<div class="empty-state" style="grid-column:1/-1">
+      grid.innerHTML = hasInvites ? '' : `<div class="empty-state" style="flex:1 1 100%">
         <div class="empty-icon"></div>
         <h3>No sessions yet</h3>
         <p>Create a new session or join one with a code.</p>

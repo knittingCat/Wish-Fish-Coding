@@ -194,13 +194,14 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-.sessions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.sessions-grid { display: flex; flex-wrap: nowrap; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
 
 .sess-card {
   background: #fff; border: 1px solid #d8e6f0;
   border-radius: 12px; padding: 18px 20px;
   transition: all .18s; cursor: pointer; display: flex; flex-direction: column; gap: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  flex: 0 0 280px;
 }
 .sess-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(74,159,213,.2); transform: translateY(-2px); }
 .sess-code {
