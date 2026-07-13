@@ -108,6 +108,8 @@ async function initDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_flagged BOOLEAN DEFAULT FALSE`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS reminder_options TEXT DEFAULT '["1h","15m"]'`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC'`);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_locked INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS invited_user_id INTEGER REFERENCES users(id)`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_1d_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_30m_sent INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS reminder_5m_sent INTEGER DEFAULT 0`);
@@ -410,6 +412,7 @@ app.delete('/api/sessions/:code', authMiddleware, async (req, res) => {
   );
   const session = result.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found or not yours' });
+  clearPendingCall(session.code);
   await pool.query('UPDATE sessions SET is_active=0 WHERE id=$1', [session.id]);
   io.to(req.params.code.toUpperCase()).emit('session-ended');
   res.json({ success: true });
@@ -422,12 +425,8 @@ app.delete('/api/sessions/:code/permanent', authMiddleware, async (req, res) => 
   );
   const session = result.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found or not yours' });
-  // Cascade delete child rows before removing the session
-  await pool.query('DELETE FROM participants   WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM messages       WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM invites        WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM session_bans   WHERE session_id=$1', [session.id]);
-  await pool.query('DELETE FROM sessions       WHERE id=$1',         [session.id]);
+  clearPendingCall(session.code);
+  await deleteSession(session.id);
   res.json({ success: true });
 });
 
@@ -887,6 +886,20 @@ app.delete('/api/group-chats/:id', authMiddleware, async (req, res) => {
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const roomState = new Map();
+const pendingCalls = new Map(); // code -> { timeout, hostId }
+
+async function deleteSession(sessionId) {
+  await pool.query('DELETE FROM participants WHERE session_id=$1', [sessionId]);
+  await pool.query('DELETE FROM messages     WHERE session_id=$1', [sessionId]);
+  await pool.query('DELETE FROM invites      WHERE session_id=$1', [sessionId]);
+  await pool.query('DELETE FROM session_bans WHERE session_id=$1', [sessionId]);
+  await pool.query('DELETE FROM sessions     WHERE id=$1',          [sessionId]);
+}
+
+function clearPendingCall(code) {
+  const pending = pendingCalls.get(code);
+  if (pending) { clearTimeout(pending.timeout); pendingCalls.delete(code); }
+}
 
 function broadcastWaitingRoom(room, state) {
   io.to(room).emit('waiting-room-update', { waiting: [...state.waitingRoom.values()] });
@@ -947,7 +960,7 @@ io.on('connection', (socket) => {
 
     if (!roomState.has(room)) {
       roomState.set(room, {
-        participants: new Map(), sharerIds: new Set(), isLocked: false,
+        participants: new Map(), sharerIds: new Set(), isLocked: !!session.is_locked,
         audioParticipants: new Map(), waitingRoom: new Map(), waitingRoomEnabled: false,
         hostId: session.host_id,
         controls: { audioJoin: true, audioUnmute: true, chat: true, viewChat: true, screenShare: true }
@@ -955,7 +968,8 @@ io.on('connection', (socket) => {
     }
     const state = roomState.get(room);
 
-    if (state.isLocked && session.host_id !== socket.user.id) {
+    const isPrivilegedForLock = session.host_id === socket.user.id || session.invited_user_id === socket.user.id;
+    if (state.isLocked && !isPrivilegedForLock) {
       socket.emit('join-rejected', { message: 'This session is locked by the host.' });
       return;
     }
@@ -969,7 +983,57 @@ io.on('connection', (socket) => {
       return;
     }
 
+    if (session.invited_user_id === socket.user.id) clearPendingCall(room);
+
     await doJoin(socket, session, room, state);
+  });
+
+  socket.on('call-contact', async ({ contactId }) => {
+    const contactRes = await pool.query(
+      `SELECT * FROM contacts WHERE id=$1 AND (requester_id=$2 OR addressee_id=$2) AND status='accepted'`,
+      [contactId, socket.user.id]
+    );
+    const contact = contactRes.rows[0];
+    if (!contact) { socket.emit('error', { message: 'Contact not found' }); return; }
+    const otherId = contact.requester_id === socket.user.id ? contact.addressee_id : contact.requester_id;
+    const otherRes = await pool.query('SELECT username FROM users WHERE id=$1', [otherId]);
+    const otherUsername = otherRes.rows[0]?.username;
+    if (!otherUsername) return;
+
+    const title = `${socket.user.username} and ${otherUsername}'s private meeting`;
+    const code = await uniqueCode();
+    const result = await pool.query(
+      `INSERT INTO sessions (code,title,host_id,is_locked,invited_user_id) VALUES ($1,$2,$3,1,$4) RETURNING *`,
+      [code, title, socket.user.id, otherId]
+    );
+    const session = result.rows[0];
+
+    socket.emit('call-started', { code: session.code, title: session.title });
+    io.to(`user-${otherId}`).emit('incoming-call', {
+      code: session.code, title: session.title,
+      fromUserId: socket.user.id, fromUsername: socket.user.username
+    });
+
+    pendingCalls.set(session.code, {
+      hostId: socket.user.id,
+      timeout: setTimeout(async () => {
+        pendingCalls.delete(session.code);
+        const check = await pool.query('SELECT id, is_active FROM sessions WHERE code=$1', [session.code]);
+        if (!check.rows[0] || !check.rows[0].is_active) return;
+        await deleteSession(check.rows[0].id);
+        io.to(session.code).emit('call-no-response', { code: session.code });
+        io.to(`user-${socket.user.id}`).emit('call-no-response', { code: session.code });
+      }, 30000)
+    });
+  });
+
+  socket.on('call-decline', async ({ code }) => {
+    const result = await pool.query('SELECT * FROM sessions WHERE code=$1', [(code || '').toUpperCase()]);
+    const session = result.rows[0];
+    if (!session || session.invited_user_id !== socket.user.id) return;
+    clearPendingCall(session.code);
+    await pool.query('UPDATE sessions SET is_active=0 WHERE id=$1', [session.id]);
+    io.to(`user-${session.host_id}`).emit('call-declined', { code: session.code, byUsername: socket.user.username });
   });
 
   socket.on('chat-message', ({ content }) => {
@@ -1039,6 +1103,7 @@ io.on('connection', (socket) => {
     const state = roomState.get(socket.sessionCode);
     if (!state) return;
     state.isLocked = !state.isLocked;
+    await pool.query('UPDATE sessions SET is_locked=$1 WHERE code=$2', [state.isLocked ? 1 : 0, socket.sessionCode]);
     io.to(socket.sessionCode).emit('lock-state', { isLocked: state.isLocked });
   });
 

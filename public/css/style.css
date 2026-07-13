@@ -664,6 +664,20 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
   .dash-wrap { padding: 16px; }
 }
 
+/* Incoming call */
+.call-modal { text-align: center; }
+.call-ring-icon {
+  font-size: 2.6rem; margin-bottom: 14px;
+  animation: call-ring 1s ease-in-out infinite;
+}
+@keyframes call-ring {
+  0%, 100% { transform: rotate(0deg); }
+  20%      { transform: rotate(-18deg); }
+  40%      { transform: rotate(14deg); }
+  60%      { transform: rotate(-10deg); }
+  80%      { transform: rotate(6deg); }
+}
+
 /* Spinner */
 .spinner {
   width: 18px; height: 18px;

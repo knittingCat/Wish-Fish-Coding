@@ -555,6 +555,16 @@
       setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
     });
 
+    socket.on('call-declined', ({ byUsername }) => {
+      toast(`${byUsername} declined the call`, 'err');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
+    });
+
+    socket.on('call-no-response', () => {
+      toast('No response — call ended', 'err');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
+    });
+
     socket.on('lock-state', ({ isLocked: locked }) => {
       isLocked = locked;
       updateLockUI();
