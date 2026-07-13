@@ -641,6 +641,7 @@
     const results = document.getElementById(resultsId);
     const chipsEl = document.getElementById(chipsId);
     let selected = [];
+    let lastMatches = [];
     let timer;
 
     userSearchState[inputId] = {
@@ -648,24 +649,36 @@
       clear: () => { selected = []; renderChips(); input.value = ''; results.style.display = 'none'; }
     };
 
+    async function runSearch(q) {
+      const users = await API.get(`/api/users/search?q=${encodeURIComponent(q)}`);
+      lastMatches = users.filter(u => !selected.find(s => s.id === u.id));
+      results.innerHTML = lastMatches.length
+        ? lastMatches.map(u => `<div class="user-search-result" onclick="userSearchPick('${inputId}',${u.id},'${esc(u.username)}')">${esc(u.username)}</div>`).join('')
+        : '<div class="user-search-noresult">No users found</div>';
+      results.style.display = '';
+    }
+
     input.addEventListener('input', () => {
       clearTimeout(timer);
-      timer = setTimeout(async () => {
-        const q = input.value.trim();
-        if (q.length < 2) { results.innerHTML = ''; results.style.display = 'none'; return; }
-        try {
-          const users = await API.get(`/api/users/search?q=${encodeURIComponent(q)}`);
-          const filtered = users.filter(u => !selected.find(s => s.id === u.id));
-          results.innerHTML = filtered.length
-            ? filtered.map(u => `<div class="user-search-result" onclick="userSearchPick('${inputId}',${u.id},'${esc(u.username)}')">${esc(u.username)}</div>`).join('')
-            : '<div class="user-search-noresult">No users found</div>';
-          results.style.display = '';
-        } catch {}
-      }, 250);
+      const q = input.value.trim();
+      if (q.length < 2) { lastMatches = []; results.innerHTML = ''; results.style.display = 'none'; return; }
+      timer = setTimeout(() => runSearch(q).catch(() => {}), 250);
     });
 
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Escape') results.style.display = 'none';
+    input.addEventListener('keydown', async e => {
+      if (e.key === 'Escape') { results.style.display = 'none'; return; }
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        clearTimeout(timer);
+        if (!lastMatches.length) {
+          try { await runSearch(q); } catch { return; }
+        }
+        const exact = lastMatches.find(u => u.username.toLowerCase() === q.toLowerCase());
+        const pick = exact || lastMatches[0];
+        if (pick) userSearchState[inputId].add(pick.id, pick.username);
+      }
     });
 
     function renderChips() {
