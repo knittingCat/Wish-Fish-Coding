@@ -642,6 +642,7 @@
     const chipsEl = document.getElementById(chipsId);
     let selected = [];
     let lastMatches = [];
+    let deleting = false;
     let timer;
 
     userSearchState[inputId] = {
@@ -658,14 +659,30 @@
       results.style.display = '';
     }
 
+    function applyInlineCompletion(q) {
+      if (!q) return;
+      const match = lastMatches.find(u => u.username.toLowerCase().startsWith(q.toLowerCase()));
+      if (!match) return;
+      input.value = q + match.username.slice(q.length);
+      input.setSelectionRange(q.length, match.username.length);
+    }
+
     input.addEventListener('input', () => {
       clearTimeout(timer);
+      const wasDeleting = deleting;
+      deleting = false;
       const q = input.value.trim();
       if (q.length < 2) { lastMatches = []; results.innerHTML = ''; results.style.display = 'none'; return; }
-      timer = setTimeout(() => runSearch(q).catch(() => {}), 250);
+      timer = setTimeout(async () => {
+        try {
+          await runSearch(q);
+          if (!wasDeleting) applyInlineCompletion(q);
+        } catch {}
+      }, 250);
     });
 
     input.addEventListener('keydown', async e => {
+      if (e.key === 'Backspace' || e.key === 'Delete') deleting = true;
       if (e.key === 'Escape') { results.style.display = 'none'; return; }
       if (e.key === 'Enter' || e.key === ',') {
         e.preventDefault();
@@ -676,8 +693,7 @@
           try { await runSearch(q); } catch { return; }
         }
         const exact = lastMatches.find(u => u.username.toLowerCase() === q.toLowerCase());
-        const pick = exact || lastMatches[0];
-        if (pick) userSearchState[inputId].add(pick.id, pick.username);
+        if (exact) userSearchState[inputId].add(exact.id, exact.username);
       }
     });
 
