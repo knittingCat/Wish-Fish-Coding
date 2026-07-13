@@ -152,6 +152,7 @@ async function initDb() {
       UNIQUE(group_id, invitee_id)
     );
   `);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS call_group_id INTEGER REFERENCES group_chats(id)`);
   console.log('Database ready');
 }
 
@@ -901,6 +902,20 @@ function clearPendingCall(code) {
   if (pending) { clearTimeout(pending.timeout); pendingCalls.delete(code); }
 }
 
+function scheduleNoResponseTimeout(session, hostId) {
+  pendingCalls.set(session.code, {
+    hostId,
+    timeout: setTimeout(async () => {
+      pendingCalls.delete(session.code);
+      const check = await pool.query('SELECT id, is_active FROM sessions WHERE code=$1', [session.code]);
+      if (!check.rows[0] || !check.rows[0].is_active) return;
+      await deleteSession(check.rows[0].id);
+      io.to(session.code).emit('call-no-response', { code: session.code });
+      io.to(`user-${hostId}`).emit('call-no-response', { code: session.code });
+    }, 30000)
+  });
+}
+
 function broadcastWaitingRoom(room, state) {
   io.to(room).emit('waiting-room-update', { waiting: [...state.waitingRoom.values()] });
 }
@@ -968,8 +983,17 @@ io.on('connection', (socket) => {
     }
     const state = roomState.get(room);
 
-    const isPrivilegedForLock = session.host_id === socket.user.id || session.invited_user_id === socket.user.id;
-    if (state.isLocked && !isPrivilegedForLock) {
+    const isHost = session.host_id === socket.user.id;
+    let isInvitedForCall = session.invited_user_id === socket.user.id;
+    if (!isInvitedForCall && session.call_group_id) {
+      const memberRes = await pool.query(
+        'SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2',
+        [session.call_group_id, socket.user.id]
+      );
+      isInvitedForCall = memberRes.rows.length > 0;
+    }
+
+    if (state.isLocked && !isHost && !isInvitedForCall) {
       socket.emit('join-rejected', { message: 'This session is locked by the host.' });
       return;
     }
@@ -983,7 +1007,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (session.invited_user_id === socket.user.id) clearPendingCall(room);
+    if (!isHost && isInvitedForCall) clearPendingCall(room);
 
     await doJoin(socket, session, room, state);
   });
@@ -1014,23 +1038,59 @@ io.on('connection', (socket) => {
       fromUserId: socket.user.id, fromUsername: socket.user.username
     });
 
-    pendingCalls.set(session.code, {
-      hostId: socket.user.id,
-      timeout: setTimeout(async () => {
-        pendingCalls.delete(session.code);
-        const check = await pool.query('SELECT id, is_active FROM sessions WHERE code=$1', [session.code]);
-        if (!check.rows[0] || !check.rows[0].is_active) return;
-        await deleteSession(check.rows[0].id);
-        io.to(session.code).emit('call-no-response', { code: session.code });
-        io.to(`user-${socket.user.id}`).emit('call-no-response', { code: session.code });
-      }, 30000)
-    });
+    scheduleNoResponseTimeout(session, socket.user.id);
+  });
+
+  socket.on('call-group', async ({ groupId }) => {
+    const memberRes = await pool.query(
+      'SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2',
+      [groupId, socket.user.id]
+    );
+    if (!memberRes.rows.length) { socket.emit('error', { message: 'Not a member of this group' }); return; }
+
+    const groupRes = await pool.query('SELECT name FROM group_chats WHERE id=$1', [groupId]);
+    const groupName = groupRes.rows[0]?.name;
+    if (!groupName) return;
+
+    const othersRes = await pool.query(
+      'SELECT user_id FROM group_chat_members WHERE group_id=$1 AND user_id!=$2',
+      [groupId, socket.user.id]
+    );
+    const otherIds = othersRes.rows.map(r => r.user_id);
+    if (!otherIds.length) { socket.emit('error', { message: 'No other members to call' }); return; }
+
+    const title = `${socket.user.username}'s call in "${groupName}"`;
+    const code = await uniqueCode();
+    const result = await pool.query(
+      `INSERT INTO sessions (code,title,host_id,is_locked,call_group_id) VALUES ($1,$2,$3,1,$4) RETURNING *`,
+      [code, title, socket.user.id, groupId]
+    );
+    const session = result.rows[0];
+
+    socket.emit('call-started', { code: session.code, title: session.title });
+    for (const uid of otherIds) {
+      io.to(`user-${uid}`).emit('incoming-call', {
+        code: session.code, title: session.title,
+        fromUserId: socket.user.id, fromUsername: socket.user.username
+      });
+    }
+
+    scheduleNoResponseTimeout(session, socket.user.id);
   });
 
   socket.on('call-decline', async ({ code }) => {
     const result = await pool.query('SELECT * FROM sessions WHERE code=$1', [(code || '').toUpperCase()]);
     const session = result.rows[0];
-    if (!session || session.invited_user_id !== socket.user.id) return;
+    if (!session) return;
+    let isInvitedForCall = session.invited_user_id === socket.user.id;
+    if (!isInvitedForCall && session.call_group_id) {
+      const memberRes = await pool.query(
+        'SELECT 1 FROM group_chat_members WHERE group_id=$1 AND user_id=$2',
+        [session.call_group_id, socket.user.id]
+      );
+      isInvitedForCall = memberRes.rows.length > 0;
+    }
+    if (!isInvitedForCall) return;
     clearPendingCall(session.code);
     await pool.query('UPDATE sessions SET is_active=0 WHERE id=$1', [session.id]);
     io.to(`user-${session.host_id}`).emit('call-declined', { code: session.code, byUsername: socket.user.username });

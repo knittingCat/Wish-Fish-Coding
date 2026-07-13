@@ -105,10 +105,7 @@
         <div id="groupChatMenu" class="p-menu-wrap">
           <button class="p-menu-btn" onclick="toggleChatMenu(event)">···</button>
           <div class="p-menu-dropdown" id="chatMenuDropdown">
-            <button class="p-menu-item" onclick="openInviteToSessionModal()">Invite to Session</button>
-            <div id="contactOnlyMenuItems">
-              <button class="p-menu-item" onclick="startPrivateCall()">Start Private Call</button>
-            </div>
+            <button class="p-menu-item" onclick="startPrivateCall()">Start Private Call</button>
             <div id="groupOnlyMenuItems">
               <button class="p-menu-item" onclick="openAddMembersModal()">Add Members</button>
               <button class="p-menu-item" onclick="openRemoveMembersModal()">Remove Members</button>
@@ -296,28 +293,6 @@
     <div id="removeMembersList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeOverlay('removeMembersOverlay')">Done</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Invite to Session Modal ────────────────────────────────────────────── -->
-<div class="overlay" id="inviteToSessionOverlay">
-  <div class="modal">
-    <div class="modal-head">
-      <h2>Invite to Session</h2>
-      <button class="modal-close" onclick="closeOverlay('inviteToSessionOverlay')">&times;</button>
-    </div>
-    <div id="inviteToSessionEmpty" class="empty-state" style="display:none">
-      <h3>No sessions yet</h3>
-      <p>Create a session first, then invite from here.</p>
-    </div>
-    <div class="form-group">
-      <label for="inviteSessionSelect">Session</label>
-      <select id="inviteSessionSelect"></select>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-secondary" onclick="closeOverlay('inviteToSessionOverlay')">Cancel</button>
-      <button class="btn btn-primary" id="inviteToSessionBtn" onclick="submitInviteToSession()">Send Invite</button>
     </div>
   </div>
 </div>
@@ -647,7 +622,6 @@
   // ── Contacts ───────────────────────────────────────────────────────────────
   let activeChatId = null;
   let activeChatType = null; // 'contact' | 'group'
-  let activeChatName = null;
   let activeGroupMembers = []; // members of currently open group
   let contactsSubTabActive = 'messages';
 
@@ -873,13 +847,11 @@
   async function openChat(chatId, name, type = 'contact') {
     activeChatId = chatId;
     activeChatType = type;
-    activeChatName = name;
     document.getElementById('contactSearchBar').style.display = 'none';
     document.getElementById('contactListView').style.display = 'none';
     document.getElementById('contactChatView').style.display = 'flex';
     document.getElementById('chatContactName').textContent = name;
     document.getElementById('groupOnlyMenuItems').style.display = type === 'group' ? '' : 'none';
-    document.getElementById('contactOnlyMenuItems').style.display = type === 'contact' ? '' : 'none';
     document.getElementById('contactChatMsgs').innerHTML = '';
     try {
       const url = type === 'group' ? `/api/group-chats/${chatId}/messages` : `/api/contacts/${chatId}/messages`;
@@ -899,7 +871,6 @@
   function showContactList() {
     activeChatId = null;
     activeChatType = null;
-    activeChatName = null;
     activeGroupMembers = [];
     document.getElementById('contactSearchBar').style.display = '';
     document.getElementById('contactChatView').style.display = 'none';
@@ -994,38 +965,6 @@
     document.getElementById('chatMenuDropdown')?.classList.remove('open');
   }
   document.addEventListener('click', () => closeChatMenu());
-
-  function openInviteToSessionModal() {
-    closeChatMenu();
-    const select = document.getElementById('inviteSessionSelect');
-    const hostSessions = allSessions.filter(s => s.is_active);
-    const hasSessions = hostSessions.length > 0;
-    document.getElementById('inviteToSessionEmpty').style.display = hasSessions ? 'none' : '';
-    select.style.display = hasSessions ? '' : 'none';
-    document.getElementById('inviteToSessionBtn').style.display = hasSessions ? '' : 'none';
-    select.innerHTML = hostSessions.map(s => `<option value="${s.code}">${esc(s.title)} (${s.code})</option>`).join('');
-    openOverlay('inviteToSessionOverlay');
-  }
-
-  async function submitInviteToSession() {
-    const code = document.getElementById('inviteSessionSelect').value;
-    if (!code) return;
-    const usernames = activeChatType === 'group'
-      ? activeGroupMembers.map(m => m.username).filter(u => u !== getUsername())
-      : [activeChatName];
-    if (!usernames.length) { toast('No one to invite.', 'err'); return; }
-    const btn = document.getElementById('inviteToSessionBtn');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
-    try {
-      await API.post(`/api/sessions/${code}/invite`, { emails: usernames });
-      closeOverlay('inviteToSessionOverlay');
-      toast('Invite sent!', 'ok');
-    } catch (err) {
-      toast(err.message, 'err');
-    } finally {
-      btn.disabled = false; btn.textContent = 'Send Invite';
-    }
-  }
 
   function openAddMembersModal() {
     closeChatMenu();
@@ -1154,8 +1093,9 @@
 
   function startPrivateCall() {
     closeChatMenu();
-    if (activeChatType !== 'contact' || !activeChatId) return;
-    dashSocket.emit('call-contact', { contactId: activeChatId });
+    if (!activeChatId) return;
+    if (activeChatType === 'group') dashSocket.emit('call-group', { groupId: activeChatId });
+    else dashSocket.emit('call-contact', { contactId: activeChatId });
   }
 
   let incomingCallCode = null;
