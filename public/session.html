@@ -49,7 +49,7 @@
         <button class="btn btn-secondary btn-sm" id="shareBtn" onclick="toggleScreenShare()">
           Share Screen
         </button>
-        <button class="btn btn-secondary btn-sm" onclick="openInviteModal()">Invite</button>
+        <button class="btn btn-secondary btn-sm" id="inviteBtn" style="display:none" onclick="openInviteModal()">Invite</button>
         <button class="btn btn-secondary btn-sm" id="waitingRoomBtn" style="display:none" onclick="toggleWaitingRoom()">Waiting Room: Off</button>
         <button class="btn btn-secondary btn-sm" id="lockBtn" style="display:none" onclick="toggleLock()">Lock</button>
         <button class="btn btn-danger btn-sm" id="endBtn" style="display:none" onclick="endSession()">End Session</button>
@@ -72,7 +72,7 @@
     <div class="sidebar-tabs">
       <button class="sidebar-tab active" id="tab-chat" onclick="sideTab('chat', this)">Chat</button>
       <button class="sidebar-tab" onclick="sideTab('people', this)">People</button>
-      <button class="sidebar-tab" onclick="sideTab('invite', this)">Invite</button>
+      <button class="sidebar-tab" id="tab-invite" style="display:none" onclick="sideTab('invite', this)">Invite</button>
       <button class="sidebar-tab" id="tab-audio" onclick="sideTab('audio', this)">Audio</button>
       <button class="sidebar-tab" id="tab-controls" style="display:none" onclick="sideTab('controls', this)">Controls</button>
     </div>
@@ -490,6 +490,8 @@
       document.getElementById('lockBtn').style.display = isHost ? '' : 'none';
       document.getElementById('waitingRoomBtn').style.display = isHost ? '' : 'none';
       document.getElementById('tab-controls').style.display = isHost ? '' : 'none';
+      document.getElementById('tab-invite').style.display = isHost ? '' : 'none';
+      document.getElementById('inviteBtn').style.display = isHost ? '' : 'none';
 
       // Load chat history
       for (const msg of sessionData.messages) {
@@ -574,6 +576,8 @@
       document.getElementById('lockBtn').style.display        = isHost ? '' : 'none';
       document.getElementById('waitingRoomBtn').style.display = isHost ? '' : 'none';
       document.getElementById('tab-controls').style.display   = isHost ? '' : 'none';
+      document.getElementById('tab-invite').style.display     = isHost ? '' : 'none';
+      document.getElementById('inviteBtn').style.display      = isHost ? '' : 'none';
       if (!isHost) applyControls(sessionControls);
       renderParticipants(lastParticipants);
       appendSystemMsg(isHost ? 'You are now the host.' : `${newHostUsername} is now the host.`);

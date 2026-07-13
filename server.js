@@ -377,6 +377,7 @@ app.post('/api/sessions/:code/invite', authMiddleware, async (req, res) => {
   const sessRes = await pool.query('SELECT * FROM sessions WHERE code=$1', [req.params.code.toUpperCase()]);
   const session = sessRes.rows[0];
   if (!session) return res.status(404).json({ error: 'Session not found' });
+  if (session.host_id !== req.user.id) return res.status(403).json({ error: 'Only the host can invite people' });
   const notFound = [];
   for (const raw of emails) {
     const entry = raw.trim();
