@@ -246,8 +246,8 @@
     </div>
     <div class="form-group">
       <label>Add Members</label>
-      <div id="newGroupChips" class="user-chips"></div>
       <div class="user-search-wrap">
+        <div id="newGroupChips" class="user-chips"></div>
         <input type="text" id="newGroupSearchInput" placeholder="Search by username…" autocomplete="off">
         <div class="user-search-results" id="newGroupSearchResults"></div>
       </div>
@@ -268,8 +268,8 @@
     </div>
     <div id="addMembersAlert" class="alert alert-err"></div>
     <div class="form-group">
-      <div id="addMembersChips" class="user-chips"></div>
       <div class="user-search-wrap">
+        <div id="addMembersChips" class="user-chips"></div>
         <input type="text" id="addMembersSearchInput" placeholder="Search by username…" autocomplete="off">
         <div class="user-search-results" id="addMembersSearchResults"></div>
       </div>
@@ -640,6 +640,8 @@
     const input = document.getElementById(inputId);
     const results = document.getElementById(resultsId);
     const chipsEl = document.getElementById(chipsId);
+    const wrap = input.closest('.user-search-wrap');
+    wrap?.addEventListener('click', () => input.focus());
     let selected = [];
     let lastMatches = [];
     let timer;

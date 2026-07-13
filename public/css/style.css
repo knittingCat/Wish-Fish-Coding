@@ -626,7 +626,17 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 .contact-chat-input-row input { flex: 1; }
 
 /* User search (for group modals) */
-.user-search-wrap { position: relative; margin-bottom: 8px; }
+.user-search-wrap {
+  position: relative; margin-bottom: 8px;
+  min-height: 44px; background: #fff;
+  border: 1px solid #d0dce8; border-radius: var(--radius);
+  padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; cursor: text;
+}
+.user-search-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.user-search-wrap input {
+  flex: 1; min-width: 140px; background: none; border: none;
+  box-shadow: none !important; padding: 4px 6px; font-size: 0.85rem;
+}
 .user-search-results {
   display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px);
   background: var(--bg1); border: 1px solid var(--border);
@@ -638,7 +648,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 }
 .user-search-result:hover { background: var(--bg3); }
 .user-search-noresult { padding: 10px 14px; font-size: 0.85rem; color: var(--txt3); }
-.user-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.user-chips { display: contents; }
 .user-chip {
   display: inline-flex; align-items: center; gap: 5px;
   background: var(--accent-dim); border: 1px solid var(--border2);
@@ -780,6 +790,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: point
 
   .contacts-sub-tab { color: var(--txt3); }
   .contacts-sub-tab.active { color: var(--accent); }
+  .user-search-wrap { background: var(--bg2); border-color: #2a3550; }
   .user-search-results { background: var(--bg2); border-color: #2a3550; }
   .user-search-result:hover { background: var(--bg3); }
 }
