@@ -1045,19 +1045,21 @@
 
   function notifyIncomingCall(fromUsername) {
     if (!window.Notification || Notification.permission !== 'granted') return;
-    // Only bother with a system notification if this window isn't the one in focus —
-    // otherwise the in-page overlay + ringtone already cover it.
-    if (document.hasFocus()) return;
-    activeCallNotification = new Notification(`${fromUsername} is calling you`, {
-      body: 'Click to open Wish Fish',
-      icon: '/favicon.svg',
-      tag: 'wishfish-incoming-call',
-      requireInteraction: true
-    });
-    activeCallNotification.onclick = () => {
-      window.focus();
-      activeCallNotification.close();
-    };
+    // Always fire — document.hasFocus() only tells us the browser window has OS
+    // focus, not that a human is actually looking at it, so it's not a reliable
+    // signal to suppress on. A redundant banner while you're looking is harmless.
+    try {
+      activeCallNotification = new Notification(`${fromUsername} is calling you`, {
+        body: 'Click to open Wish Fish',
+        icon: '/favicon.svg',
+        tag: 'wishfish-incoming-call',
+        requireInteraction: true
+      });
+      activeCallNotification.onclick = () => {
+        window.focus();
+        activeCallNotification.close();
+      };
+    } catch {}
   }
 
   function clearIncomingCallNotification() {
