@@ -1036,6 +1036,37 @@
     } catch {}
   }
 
+  // ── Desktop notifications (so incoming calls are visible from other windows) ─
+  if (window.Notification && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+
+  let activeCallNotification = null;
+
+  function notifyIncomingCall(fromUsername) {
+    if (!window.Notification || Notification.permission !== 'granted') return;
+    // Only bother with a system notification if this window isn't the one in focus —
+    // otherwise the in-page overlay + ringtone already cover it.
+    if (document.hasFocus()) return;
+    activeCallNotification = new Notification(`${fromUsername} is calling you`, {
+      body: 'Click to open Wish Fish',
+      icon: '/favicon.svg',
+      tag: 'wishfish-incoming-call',
+      requireInteraction: true
+    });
+    activeCallNotification.onclick = () => {
+      window.focus();
+      activeCallNotification.close();
+    };
+  }
+
+  function clearIncomingCallNotification() {
+    if (activeCallNotification) {
+      activeCallNotification.close();
+      activeCallNotification = null;
+    }
+  }
+
   // ── Dashboard socket for real-time contact events ──────────────────────────
   const dashSocket = io({ auth: { token: getToken() } });
   dashSocket.on('contact-request-received', ({ from }) => {
@@ -1135,12 +1166,14 @@
     document.getElementById('callFromName').textContent = fromUsername;
     openOverlay('incomingCallOverlay');
     playRingtone();
+    notifyIncomingCall(fromUsername);
     ringTimeout = setTimeout(() => closeIncomingCall(), 30000);
   }
 
   function closeIncomingCall() {
     clearTimeout(ringTimeout);
     stopRingtone();
+    clearIncomingCallNotification();
     closeOverlay('incomingCallOverlay');
     incomingCallCode = null;
   }
